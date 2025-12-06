@@ -13,17 +13,6 @@ const articleSchema: Schema = {
   required: ["headline", "body"],
 };
 
-const translationSchema: Schema = {
-  type: Type.OBJECT,
-  properties: {
-    translation: { type: Type.STRING, description: "The English translation of the target word or sentence." },
-    pronunciation: { type: Type.STRING, description: "IPA pronunciation or phonetic transcription." },
-    partOfSpeech: { type: Type.STRING, description: "Grammatical type (noun, verb, etc) or 'Sentence'/'Phrase'." },
-    exampleSentence: { type: Type.STRING, description: "A simple example sentence in Danish using the word. If the input is already a sentence, return the input itself." },
-  },
-  required: ["translation", "pronunciation", "partOfSpeech", "exampleSentence"],
-};
-
 export const generateArticle = async (topic: string): Promise<Article> => {
   try {
     const response = await ai.models.generateContent({
@@ -55,13 +44,43 @@ export const generateArticle = async (topic: string): Promise<Article> => {
   }
 };
 
-export const translateWordInContext = async (textToTranslate: string, contextSentence: string): Promise<WordDefinition> => {
+export const translateWordInContext = async (textToTranslate: string, contextSentence: string, includeChinese: boolean = false): Promise<WordDefinition> => {
   try {
     const isPhrase = textToTranslate.trim().includes(' ');
     
-    const prompt = isPhrase 
-        ? `Translate the Danish text "${textToTranslate}" into English. The text appears in this context: "${contextSentence}".`
-        : `Translate the Danish word "${textToTranslate}" into English. The word appears in this context: "${contextSentence}". Provide the most appropriate meaning for this specific context.`;
+    const basePrompt = isPhrase 
+        ? `Translate the Danish text "${textToTranslate}"`
+        : `Translate the Danish word "${textToTranslate}"`;
+
+    let instructions = `${basePrompt}. Provide the English translation.`;
+    if (includeChinese) {
+        instructions += ` Also provide the Simplified Chinese translation.`;
+    }
+    
+    const contextInstruction = `The text appears in this context: "${contextSentence}". Provide the most appropriate meaning for this specific context.`;
+    
+    const prompt = `${instructions} ${contextInstruction}`;
+
+    // Dynamically build schema based on whether Chinese is requested
+    const schemaProperties: any = {
+      translation: { type: Type.STRING, description: "The definition/translation in English. MUST be in English." },
+      pronunciation: { type: Type.STRING, description: "IPA pronunciation or phonetic transcription." },
+      partOfSpeech: { type: Type.STRING, description: "Grammatical type (noun, verb, etc) or 'Sentence'/'Phrase'." },
+      exampleSentence: { type: Type.STRING, description: "A simple example sentence in Danish using the word. If the input is already a sentence, return the input itself." },
+    };
+
+    const requiredFields = ["translation", "pronunciation", "partOfSpeech", "exampleSentence"];
+
+    if (includeChinese) {
+      schemaProperties.chineseTranslation = { type: Type.STRING, description: "The definition/translation in Simplified Chinese." };
+      requiredFields.push("chineseTranslation");
+    }
+
+    const translationSchema: Schema = {
+      type: Type.OBJECT,
+      properties: schemaProperties,
+      required: requiredFields,
+    };
 
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash",
@@ -82,6 +101,7 @@ export const translateWordInContext = async (textToTranslate: string, contextSen
       word: textToTranslate,
       contextParams: contextSentence,
       translation: json.translation,
+      chineseTranslation: json.chineseTranslation,
       pronunciation: json.pronunciation,
       partOfSpeech: json.partOfSpeech,
       exampleSentence: json.exampleSentence,

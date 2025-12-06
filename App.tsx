@@ -13,6 +13,7 @@ function App() {
   const [loadingState, setLoadingState] = useState<LoadingState>(LoadingState.IDLE);
   const [isGeneratorOpen, setIsGeneratorOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false); // For mobile responsiveness
+  const [showChinese, setShowChinese] = useState(false);
   
   // Article History State
   const [articleHistory, setArticleHistory] = useState<Article[]>(() => {
@@ -93,14 +94,14 @@ function App() {
     setCurrentDefinition(null); // Clear previous while loading
 
     try {
-      const definition = await translateWordInContext(word, context);
+      const definition = await translateWordInContext(word, context, showChinese);
       setCurrentDefinition(definition);
       
       setHistory(prev => {
         // Avoid duplicates at the top of the list
         const filtered = prev.filter(item => item.word.toLowerCase() !== definition.word.toLowerCase());
         const newItem: HistoryItem = { ...definition, id: crypto.randomUUID(), timestamp: Date.now() };
-        return [newItem, ...filtered].slice(0, 50); // Keep last 50
+        return [newItem, ...filtered].slice(50); // Keep last 50
       });
 
     } catch (error) {
@@ -119,11 +120,25 @@ function App() {
             <div className="w-8 h-8 bg-danish-red rounded-md flex items-center justify-center text-white font-bold font-serif text-xl">D</div>
             <h1 className="text-xl font-bold tracking-tight text-gray-900 flex items-baseline">
               Dansk<span className="text-danish-red">Reader</span>
-              <span className="ml-2 text-sm text-gray-500 font-medium">by Doctor Wang</span>
+              <span className="ml-2 text-sm text-gray-500 font-medium hidden sm:inline-block">by Doctor Wang</span>
             </h1>
           </div>
           
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
+             {/* Chinese Toggle */}
+            <button
+              onClick={() => setShowChinese(!showChinese)}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${
+                showChinese 
+                  ? 'bg-red-50 text-danish-red border-danish-red/30 ring-1 ring-danish-red/30' 
+                  : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
+              }`}
+              title="Toggle Chinese Translation"
+            >
+              <span>🇨🇳</span>
+              <span className="hidden sm:inline">{showChinese ? '中文 On' : '中文 Off'}</span>
+            </button>
+
             <button 
               onClick={() => setIsGeneratorOpen(true)}
               className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-full text-sm font-medium hover:bg-gray-800 transition-colors"

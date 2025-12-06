@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { HistoryItem, WordDefinition } from '../types';
-import { BookMarked, Volume2, Loader2 } from 'lucide-react';
+import { BookMarked, Volume2, Loader2, Languages } from 'lucide-react';
 import { playPronunciation } from '../services/geminiService';
 
 interface HistorySidebarProps {
@@ -66,8 +66,22 @@ const HistorySidebar: React.FC<HistorySidebarProps> = ({ currentDefinition, hist
               </span>
             </div>
 
-            <div className="mb-4">
-              <p className="text-lg font-medium text-gray-900 leading-snug">{currentDefinition.translation}</p>
+            <div className="mb-4 space-y-2">
+              <div className="flex items-start gap-2">
+                {currentDefinition.chineseTranslation && (
+                   <span className="text-xs font-bold text-gray-400 mt-1 w-6 flex-shrink-0">EN</span>
+                )}
+                <p className="text-lg font-medium text-gray-900 leading-snug">{currentDefinition.translation}</p>
+              </div>
+              
+              {currentDefinition.chineseTranslation && (
+                <div className="flex items-start gap-2 pt-2 border-t border-gray-50">
+                  <span className="text-xs font-bold text-gray-400 mt-1 w-6 flex-shrink-0">CN</span>
+                  <p className="text-base font-medium text-gray-700 leading-snug">
+                    {currentDefinition.chineseTranslation}
+                  </p>
+                </div>
+              )}
             </div>
 
             <div className="bg-gray-50 p-3 rounded-lg border border-gray-100">
@@ -99,6 +113,9 @@ const HistorySidebar: React.FC<HistorySidebarProps> = ({ currentDefinition, hist
                       <span className="text-xs text-gray-400 whitespace-nowrap">{new Date(item.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
                     </div>
                     <div className="text-gray-600 text-sm line-clamp-2">{item.translation}</div>
+                    {item.chineseTranslation && (
+                        <div className="text-gray-500 text-xs mt-0.5 line-clamp-1">🇨🇳 {item.chineseTranslation}</div>
+                    )}
                   </div>
                 </div>
               </div>
