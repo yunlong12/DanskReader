@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { generateArticle, translateWordInContext } from './services/geminiService';
+import React, { useState, useEffect, useRef } from 'react';
+import { generateArticle, translateWordInContext, playPronunciation } from './services/geminiService';
 import { Article, WordDefinition, HistoryItem, LoadingState } from './types';
 import ArticleReader from './components/ArticleReader';
 import HistorySidebar from './components/HistorySidebar';
 import ArticleGeneratorModal from './components/ArticleGeneratorModal';
-import { Sparkles, Menu } from 'lucide-react';
+import { Sparkles, Menu, Volume2, Turtle } from 'lucide-react';
 
 function App() {
   const [article, setArticle] = useState<Article | null>(null);
@@ -14,6 +14,11 @@ function App() {
   const [isGeneratorOpen, setIsGeneratorOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false); // For mobile responsiveness
   const [showChinese, setShowChinese] = useState(false);
+  const [autoPlayAudio, setAutoPlayAudio] = useState(false);
+  const [isSlowAudio, setIsSlowAudio] = useState(false);
+  
+  // Ref to track the current word being played to prevent overlapping loops
+  const currentPlayingWordRef = useRef<string | null>(null);
   
   // Article History State
   const [articleHistory, setArticleHistory] = useState<Article[]>(() => {
@@ -92,6 +97,8 @@ function App() {
 
     setLoadingState(LoadingState.TRANSLATING);
     setCurrentDefinition(null); // Clear previous while loading
+    // Update ref to indicate any previous playback loop should ideally stop or be ignored (logic below)
+    currentPlayingWordRef.current = word;
 
     try {
       const definition = await translateWordInContext(word, context, showChinese);
@@ -103,6 +110,27 @@ function App() {
         const newItem: HistoryItem = { ...definition, id: crypto.randomUUID(), timestamp: Date.now() };
         return [newItem, ...filtered].slice(50); // Keep last 50
       });
+
+      // Handle Auto-Play logic
+      if (autoPlayAudio) {
+        (async () => {
+          const speed = isSlowAudio ? 0.5 : 1.0;
+          // Play 3 times
+          for (let i = 0; i < 3; i++) {
+            // Check if the user has selected a different word in the meantime
+            if (currentPlayingWordRef.current !== word) break;
+            
+            try {
+              await playPronunciation(definition.word, speed);
+              // Small delay between repetitions
+              if (i < 2) await new Promise(resolve => setTimeout(resolve, 500));
+            } catch (e) {
+              console.warn("Auto-play interrupted or failed", e);
+              break;
+            }
+          }
+        })();
+      }
 
     } catch (error) {
       console.error("Translation failed", error);
@@ -125,7 +153,37 @@ function App() {
           </div>
           
           <div className="flex items-center gap-3">
-             {/* Chinese Toggle */}
+            {/* Auto Play Toggle */}
+            <button
+              onClick={() => setAutoPlayAudio(!autoPlayAudio)}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${
+                autoPlayAudio 
+                  ? 'bg-blue-50 text-blue-600 border-blue-200 ring-1 ring-blue-200' 
+                  : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
+              }`}
+              title="Auto-play audio 3 times on lookup"
+            >
+              <Volume2 size={14} />
+              <span className="hidden sm:inline">{autoPlayAudio ? 'Auto Play (3x)' : 'Auto Play Off'}</span>
+              <span className="sm:hidden">{autoPlayAudio ? '3x On' : '3x Off'}</span>
+            </button>
+
+            {/* Slow Audio Toggle */}
+            <button
+              onClick={() => setIsSlowAudio(!isSlowAudio)}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${
+                isSlowAudio 
+                  ? 'bg-amber-50 text-amber-700 border-amber-200 ring-1 ring-amber-200' 
+                  : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
+              }`}
+              title="Play audio at 0.5x speed"
+            >
+              <Turtle size={14} />
+              <span className="hidden sm:inline">{isSlowAudio ? 'Slow (0.5x)' : 'Normal Speed'}</span>
+              <span className="sm:hidden">{isSlowAudio ? '0.5x' : '1.0x'}</span>
+            </button>
+
+            {/* Chinese Toggle */}
             <button
               onClick={() => setShowChinese(!showChinese)}
               className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${
@@ -185,6 +243,7 @@ function App() {
                 currentDefinition={currentDefinition} 
                 history={history}
                 isLoading={loadingState === LoadingState.TRANSLATING}
+                playbackSpeed={isSlowAudio ? 0.5 : 1.0}
              />
           </div>
         </div>

@@ -7,9 +7,10 @@ interface HistorySidebarProps {
   currentDefinition: WordDefinition | null;
   history: HistoryItem[];
   isLoading: boolean;
+  playbackSpeed: number;
 }
 
-const HistorySidebar: React.FC<HistorySidebarProps> = ({ currentDefinition, history, isLoading }) => {
+const HistorySidebar: React.FC<HistorySidebarProps> = ({ currentDefinition, history, isLoading, playbackSpeed }) => {
   const [isPlaying, setIsPlaying] = useState(false);
 
   const handlePlayAudio = async () => {
@@ -17,7 +18,7 @@ const HistorySidebar: React.FC<HistorySidebarProps> = ({ currentDefinition, hist
     
     setIsPlaying(true);
     try {
-      await playPronunciation(currentDefinition.word);
+      await playPronunciation(currentDefinition.word, playbackSpeed);
     } catch (error) {
       console.error("Failed to play audio", error);
     } finally {
@@ -53,7 +54,7 @@ const HistorySidebar: React.FC<HistorySidebarProps> = ({ currentDefinition, hist
                   onClick={handlePlayAudio}
                   disabled={isPlaying}
                   className="text-gray-400 hover:text-danish-red transition-colors p-1 rounded-full hover:bg-red-50 disabled:opacity-50 flex-shrink-0 mt-1"
-                  title="Listen to pronunciation"
+                  title={`Listen to pronunciation (${playbackSpeed}x)`}
                 >
                   {isPlaying ? <Loader2 size={20} className="animate-spin" /> : <Volume2 size={20} />}
               </button>

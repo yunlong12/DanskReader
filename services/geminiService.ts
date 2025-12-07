@@ -57,13 +57,16 @@ export const translateWordInContext = async (textToTranslate: string, contextSen
         instructions += ` Also provide the Simplified Chinese translation.`;
     }
     
+    // Explicitly instruct to act like Google Translate
+    instructions += ` You are a strict translator tool. Provide direct, standard dictionary definitions. Do not include explanatory filler text.`;
+    
     const contextInstruction = `The text appears in this context: "${contextSentence}". Provide the most appropriate meaning for this specific context.`;
     
     const prompt = `${instructions} ${contextInstruction}`;
 
     // Dynamically build schema based on whether Chinese is requested
     const schemaProperties: any = {
-      translation: { type: Type.STRING, description: "The definition/translation in English. MUST be in English." },
+      translation: { type: Type.STRING, description: "The definition/translation in English. MUST be in English. Direct translation only." },
       pronunciation: { type: Type.STRING, description: "IPA pronunciation or phonetic transcription." },
       partOfSpeech: { type: Type.STRING, description: "Grammatical type (noun, verb, etc) or 'Sentence'/'Phrase'." },
       exampleSentence: { type: Type.STRING, description: "A simple example sentence in Danish using the word. If the input is already a sentence, return the input itself." },
@@ -72,7 +75,7 @@ export const translateWordInContext = async (textToTranslate: string, contextSen
     const requiredFields = ["translation", "pronunciation", "partOfSpeech", "exampleSentence"];
 
     if (includeChinese) {
-      schemaProperties.chineseTranslation = { type: Type.STRING, description: "The definition/translation in Simplified Chinese." };
+      schemaProperties.chineseTranslation = { type: Type.STRING, description: "The definition/translation in Simplified Chinese. MUST be in Chinese. Direct translation only." };
       requiredFields.push("chineseTranslation");
     }
 
@@ -88,7 +91,7 @@ export const translateWordInContext = async (textToTranslate: string, contextSen
       config: {
         responseMimeType: "application/json",
         responseSchema: translationSchema,
-        temperature: 0.3, // Lower temperature for more deterministic/accurate translations
+        temperature: 0.1, // Very low temperature for deterministic, standard translations
       },
     });
 
@@ -112,7 +115,7 @@ export const translateWordInContext = async (textToTranslate: string, contextSen
   }
 };
 
-export const playPronunciation = async (text: string): Promise<void> => {
+export const playPronunciation = async (text: string, speed: number = 1.0): Promise<void> => {
   return new Promise((resolve, reject) => {
     // Google Translate TTS GET request fails if the URL is too long. 
     // Truncate to safe limit (approx 200 chars) for playback.
@@ -127,6 +130,7 @@ export const playPronunciation = async (text: string): Promise<void> => {
     const audio = document.createElement('audio');
     audio.setAttribute('referrerpolicy', 'no-referrer');
     audio.src = url;
+    audio.playbackRate = speed;
     
     let hasResolved = false;
 
@@ -146,6 +150,7 @@ export const playPronunciation = async (text: string): Promise<void> => {
         if ('speechSynthesis' in window) {
            const utterance = new SpeechSynthesisUtterance(safeText);
            utterance.lang = 'da-DK';
+           utterance.rate = speed;
            
            // Attempt to find a Danish voice for better quality
            const voices = window.speechSynthesis.getVoices();
