@@ -108,6 +108,10 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
            const cleanWord = cleanWordMatch ? cleanWordMatch[0] : selectedText;
            onWordSelect(cleanWord, context);
         }
+
+        // Dismiss the native context menu (Android/iOS) by clearing the selection visual
+        // The selectionRect state has already been captured above, so the popover will still appear correctly
+        selection.removeAllRanges();
       }
     }, 10);
   }, [onWordSelect, onClearSelection]);
@@ -272,6 +276,7 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
       <div 
         className="max-w-3xl mx-auto bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden min-h-[600px]"
         onMouseUp={handleMouseUp}
+        onContextMenu={(e) => e.preventDefault()}
       >
         {/* Article Header */}
         <div className="p-8 pb-4 border-b border-gray-100">

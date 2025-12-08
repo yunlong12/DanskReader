@@ -6,6 +6,10 @@
     <title>Dansk Reader</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Merriweather:ital,wght@0,300;0,400;0,700;1,400&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#ffffff">
+    <meta name="mobile-web-app-capable" content="yes">
+    <link rel="apple-touch-icon" href="/icon.png">
     <script>
       tailwind.config = {
         theme: {
@@ -29,6 +33,10 @@
       ::selection {
         background-color: #fde68a; /* amber-200 */
         color: #1f2937;
+      }
+      /* Prevent system menu on mobile touches */
+      body {
+        -webkit-touch-callout: none;
       }
     </style>
   <script type="importmap">
