@@ -88,6 +88,18 @@ function App() {
     });
   };
 
+  const handleSetBookmark = (paragraphIndex: number) => {
+    if (!article) return;
+
+    const updatedArticle = { ...article, bookmarkParagraphIndex: paragraphIndex };
+    setArticle(updatedArticle);
+
+    // Update history
+    setArticleHistory(prev => {
+      return prev.map(a => a.id === updatedArticle.id ? updatedArticle : a);
+    });
+  };
+
   const handleClearSelection = () => {
     setCurrentDefinition(null);
   };
@@ -249,6 +261,7 @@ function App() {
             currentDefinition={currentDefinition}
             isTranslating={loadingState === LoadingState.TRANSLATING}
             showDetailed={showDetailed}
+            onSetBookmark={handleSetBookmark}
           />
         </main>
       </div>

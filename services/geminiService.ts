@@ -44,6 +44,30 @@ export const generateArticle = async (topic: string): Promise<Article> => {
   }
 };
 
+export const transcribeImage = async (base64Image: string, mimeType: string): Promise<string> => {
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: [
+        {
+          inlineData: {
+            mimeType: mimeType,
+            data: base64Image
+          }
+        },
+        {
+          text: "Transcribe the text contained in this image exactly as it appears. The text is in Danish. Do not add any introductory text, translation, or markdown formatting (like ```). Just return the raw Danish text. If there are headers, keep them on separate lines."
+        }
+      ]
+    });
+
+    return response.text || "";
+  } catch (error) {
+    console.error("Error transcribing image:", error);
+    throw error;
+  }
+};
+
 export const translateWordInContext = async (textToTranslate: string, contextSentence: string, includeChinese: boolean = false): Promise<WordDefinition> => {
   try {
     const isPhrase = textToTranslate.trim().includes(' ');

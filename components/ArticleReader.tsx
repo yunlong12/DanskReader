@@ -1,6 +1,6 @@
-import React, { useCallback, useState, useEffect } from 'react';
+import React, { useCallback, useState, useEffect, useRef } from 'react';
 import { Article, WordDefinition } from '../types';
-import { BookOpen, RefreshCw, Loader2 } from 'lucide-react';
+import { BookOpen, RefreshCw, Loader2, Bookmark } from 'lucide-react';
 
 interface ArticleReaderProps {
   article: Article | null;
@@ -11,6 +11,7 @@ interface ArticleReaderProps {
   currentDefinition: WordDefinition | null;
   isTranslating: boolean;
   showDetailed: boolean;
+  onSetBookmark: (index: number) => void;
 }
 
 const ArticleReader: React.FC<ArticleReaderProps> = ({ 
@@ -21,9 +22,34 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
   onGenerateNew,
   currentDefinition,
   isTranslating,
-  showDetailed
+  showDetailed,
+  onSetBookmark
 }) => {
   const [selectionRect, setSelectionRect] = useState<DOMRect | null>(null);
+  // Track window width to ensure popover calculations are accurate on resize/rotation
+  const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 0);
+  
+  // Refs for auto-scrolling to bookmark
+  const paragraphRefs = useRef<(HTMLParagraphElement | null)[]>([]);
+
+  useEffect(() => {
+    const handleResize = () => setWindowWidth(window.innerWidth);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Scroll to bookmark when article changes
+  useEffect(() => {
+    if (article && typeof article.bookmarkParagraphIndex === 'number') {
+      const index = article.bookmarkParagraphIndex;
+      const el = paragraphRefs.current[index];
+      if (el) {
+        setTimeout(() => {
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 100);
+      }
+    }
+  }, [article?.id, article?.bookmarkParagraphIndex]);
 
   const handleMouseUp = useCallback(() => {
     // Use a small timeout to ensure the selection is fully finalized by the browser
@@ -111,15 +137,39 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
     if (!selectionRect || (!isTranslating && !currentDefinition)) return null;
 
     // Smart positioning logic
-    // If top of selection is < 250px from viewport top, place below.
-    // Otherwise place above.
     const spaceAbove = selectionRect.top;
     const placeBelow = spaceAbove < 250;
+    
+    // Constants for width calculation (w-72 = 288px, w-80 = 320px)
+    const isMobile = windowWidth < 768;
+    const popoverWidth = isMobile ? 288 : 320; 
+    const margin = 12; // Safety margin from screen edge
+
+    // Calculate horizontal position
+    const textCenter = selectionRect.left + (selectionRect.width / 2);
+    
+    // Clamp the center position of the popover so it stays within screen bounds
+    // Min center X = half width + margin
+    // Max center X = screen width - half width - margin
+    const minCenterX = (popoverWidth / 2) + margin;
+    const maxCenterX = windowWidth - (popoverWidth / 2) - margin;
+    
+    // The actual X position for the center of the popover
+    const popoverCenterX = Math.max(minCenterX, Math.min(textCenter, maxCenterX));
+    
+    // Calculate how much we shifted from the ideal text center
+    // If popoverCenterX < textCenter, we shifted left, so arrow needs to shift right (positive)
+    // Arrow offset should be applied to the arrow element relative to the popover center
+    const arrowOffset = textCenter - popoverCenterX;
+    
+    // Clamp arrow offset so it doesn't detach from the box (keep within rounded corners)
+    const maxArrowOffset = (popoverWidth / 2) - 24; // 24px buffer for corners
+    const clampedArrowOffset = Math.max(-maxArrowOffset, Math.min(arrowOffset, maxArrowOffset));
 
     const popoverStyle: React.CSSProperties = {
       position: 'fixed',
       zIndex: 50,
-      left: `${selectionRect.left + (selectionRect.width / 2)}px`,
+      left: `${popoverCenterX}px`,
       // If placing below, we position at the bottom of the text rect
       // If placing above, we position at the top of the text rect
       top: placeBelow ? `${selectionRect.bottom + 12}px` : `${selectionRect.top - 12}px`,
@@ -137,6 +187,10 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
     const arrowClass = placeBelow 
       ? `${arrowBaseClass} top-[-6px] border-t border-l`
       : `${arrowBaseClass} bottom-[-6px] border-b border-r`;
+      
+    const arrowStyle: React.CSSProperties = {
+        marginLeft: `${clampedArrowOffset}px`
+    };
 
     return (
         <div 
@@ -207,7 +261,7 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
             )}
             
             {/* Popover Arrow */}
-            <div className={arrowClass}></div>
+            <div className={arrowClass} style={arrowStyle}></div>
           </div>
         </div>
     );
@@ -245,9 +299,35 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
           className="p-8 pt-6 font-serif text-lg leading-relaxed text-gray-800 space-y-6 selection:bg-yellow-200 selection:text-black cursor-text"
         >
           {paragraphs.map((paragraph, index) => (
-            <p key={index} className="mb-4">
-              {paragraph}
-            </p>
+            <div key={index} className="flex gap-3 group relative">
+               {/* Bookmark Button */}
+               <div className="w-8 flex-shrink-0 flex justify-end pt-1.5 select-none">
+                  <button
+                    onClick={(e) => {
+                       e.stopPropagation(); // Prevent selection
+                       onSetBookmark(index);
+                    }}
+                    className={`transition-all duration-200 ${
+                       article.bookmarkParagraphIndex === index 
+                        ? 'text-danish-red opacity-100 scale-100' 
+                        : 'text-gray-200 opacity-0 group-hover:opacity-100 hover:text-danish-red/70 scale-90 hover:scale-100'
+                    }`}
+                    title={article.bookmarkParagraphIndex === index ? "Bookmarked" : "Bookmark this paragraph"}
+                  >
+                     <Bookmark size={20} fill={article.bookmarkParagraphIndex === index ? "currentColor" : "none"} />
+                  </button>
+               </div>
+               
+               {/* Paragraph Text */}
+               <p
+                 ref={el => { paragraphRefs.current[index] = el; }}
+                 className={`transition-colors duration-500 rounded-lg px-2 -mx-2 flex-1 ${
+                    article.bookmarkParagraphIndex === index ? 'bg-amber-50' : ''
+                 }`}
+               >
+                 {paragraph}
+               </p>
+            </div>
           ))}
         </div>
       </div>

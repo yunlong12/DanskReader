@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
-import { X, Clipboard, ArrowLeft, BookOpen, Trash2 } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { X, Clipboard, ArrowLeft, BookOpen, Trash2, FileText, Camera, Upload, Loader2 } from 'lucide-react';
 import { Article } from '../types';
+import { transcribeImage } from '../services/geminiService';
 
 interface ArticleGeneratorModalProps {
   isOpen: boolean;
@@ -21,6 +22,10 @@ const ArticleGeneratorModal: React.FC<ArticleGeneratorModalProps> = ({
   const [mode, setMode] = useState<'menu' | 'paste'>('menu');
   const [pasteTitle, setPasteTitle] = useState('');
   const [pasteContent, setPasteContent] = useState('');
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
   
   if (!isOpen) return null;
 
@@ -29,13 +34,63 @@ const ArticleGeneratorModal: React.FC<ArticleGeneratorModalProps> = ({
     if (!pasteContent.trim()) return;
     
     onPaste(pasteTitle.trim() || 'My Article', pasteContent);
-    setPasteTitle('');
-    setPasteContent('');
-    setMode('menu');
+    resetForm();
   };
 
   const handleBack = () => {
     setMode('menu');
+  };
+
+  const resetForm = () => {
+    setPasteTitle('');
+    setPasteContent('');
+    setMode('menu');
+    setIsTranscribing(false);
+  };
+
+  const handleTextFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target?.result as string;
+      if (text) {
+        setPasteTitle(file.name.replace('.txt', ''));
+        setPasteContent(text);
+        setMode('paste');
+      }
+    };
+    reader.readAsText(file);
+    // Reset input
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsTranscribing(true);
+    setMode('paste'); // Switch to form view to show loading state
+    setPasteTitle(file.name);
+    setPasteContent('Transcribing image with AI... please wait...');
+
+    const reader = new FileReader();
+    reader.onloadend = async () => {
+      try {
+        const base64String = (reader.result as string).split(',')[1];
+        const transcribedText = await transcribeImage(base64String, file.type);
+        setPasteContent(transcribedText);
+      } catch (error) {
+        console.error(error);
+        setPasteContent("Error: Could not transcribe image. Please try again.");
+      } finally {
+        setIsTranscribing(false);
+      }
+    };
+    reader.readAsDataURL(file);
+    // Reset input
+    if (imageInputRef.current) imageInputRef.current.value = '';
   };
 
   return (
@@ -51,7 +106,7 @@ const ArticleGeneratorModal: React.FC<ArticleGeneratorModalProps> = ({
               </button>
             )}
             <h2 className="text-xl font-bold text-gray-900">
-              {mode === 'paste' ? 'Paste News / Text' : 'Your Library'}
+              {mode === 'paste' ? 'Import Content' : 'Your Library'}
             </h2>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
@@ -63,28 +118,73 @@ const ArticleGeneratorModal: React.FC<ArticleGeneratorModalProps> = ({
         <div className="p-4 overflow-y-auto flex-1">
           {mode === 'menu' ? (
             <div className="space-y-4">
-              {/* Paste Option - Top of List */}
-              <button
-                onClick={() => setMode('paste')}
-                className="w-full flex items-center gap-4 p-4 rounded-xl hover:bg-blue-50 border-2 border-dashed border-blue-200 hover:border-blue-300 transition-all text-left group bg-blue-50/30"
-              >
-                <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition-colors">
-                  <Clipboard size={20} />
-                </div>
-                <div>
-                  <h3 className="font-bold text-blue-900">Paste New Text</h3>
-                  <p className="text-xs text-blue-600">Copy and paste Danish news or articles</p>
-                </div>
-              </button>
               
-              <div className="border-t border-gray-100 pt-4">
+              <div className="grid grid-cols-1 gap-3">
+                {/* Paste Option */}
+                <button
+                  onClick={() => setMode('paste')}
+                  className="w-full flex items-center gap-4 p-4 rounded-xl hover:bg-blue-50 border border-gray-100 hover:border-blue-200 transition-all text-left group"
+                >
+                  <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                    <Clipboard size={20} />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-gray-900">Paste Text</h3>
+                    <p className="text-xs text-gray-500">Copy text from anywhere</p>
+                  </div>
+                </button>
+
+                {/* Upload Text File */}
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full flex items-center gap-4 p-4 rounded-xl hover:bg-green-50 border border-gray-100 hover:border-green-200 transition-all text-left group"
+                >
+                  <div className="w-10 h-10 rounded-full bg-green-100 text-green-600 flex items-center justify-center group-hover:bg-green-600 group-hover:text-white transition-colors">
+                    <FileText size={20} />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-gray-900">Upload Text File</h3>
+                    <p className="text-xs text-gray-500">Select a .txt file</p>
+                  </div>
+                  <input 
+                    type="file" 
+                    ref={fileInputRef} 
+                    onChange={handleTextFileUpload} 
+                    accept=".txt" 
+                    className="hidden" 
+                  />
+                </button>
+
+                {/* Scan Image (OCR) */}
+                <button
+                  onClick={() => imageInputRef.current?.click()}
+                  className="w-full flex items-center gap-4 p-4 rounded-xl hover:bg-purple-50 border border-gray-100 hover:border-purple-200 transition-all text-left group"
+                >
+                  <div className="w-10 h-10 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center group-hover:bg-purple-600 group-hover:text-white transition-colors">
+                    <Camera size={20} />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-gray-900">Scan Page (AI)</h3>
+                    <p className="text-xs text-gray-500">Photo/Screenshot to Text</p>
+                  </div>
+                  <input 
+                    type="file" 
+                    ref={imageInputRef} 
+                    onChange={handleImageUpload} 
+                    accept="image/*" 
+                    className="hidden" 
+                  />
+                </button>
+              </div>
+              
+              <div className="border-t border-gray-100 pt-4 mt-2">
                   <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 ml-1">History</p>
                   
                   {articleHistory.length === 0 ? (
                     <div className="text-center py-8 text-gray-400 text-sm">
                       <BookOpen size={32} className="mx-auto mb-2 opacity-20" />
                       <p>No articles yet.</p>
-                      <p className="text-xs mt-1">Paste a text to start reading!</p>
+                      <p className="text-xs mt-1">Import a text to start reading!</p>
                     </div>
                   ) : (
                     <div className="space-y-2">
@@ -115,11 +215,12 @@ const ArticleGeneratorModal: React.FC<ArticleGeneratorModalProps> = ({
                   type="text" 
                   value={pasteTitle}
                   onChange={(e) => setPasteTitle(e.target.value)}
-                  placeholder="e.g., Dagens Nyheder"
+                  placeholder="e.g., Chapter 1"
                   className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                  disabled={isTranscribing}
                 />
               </div>
-              <div className="flex-1 min-h-[200px]">
+              <div className="flex-1 min-h-[200px] relative">
                 <label className="block text-sm font-medium text-gray-700 mb-1">Content (Danish)</label>
                 <textarea 
                   value={pasteContent}
@@ -127,13 +228,22 @@ const ArticleGeneratorModal: React.FC<ArticleGeneratorModalProps> = ({
                   placeholder="Paste your Danish text here..."
                   className="w-full h-full min-h-[200px] px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none font-serif text-base"
                   required
+                  disabled={isTranscribing}
                 />
+                {isTranscribing && (
+                  <div className="absolute inset-0 bg-white/80 flex flex-col items-center justify-center text-center z-10 rounded-lg backdrop-blur-sm">
+                    <Loader2 size={40} className="text-blue-600 animate-spin mb-3" />
+                    <p className="font-bold text-gray-800">Transcribing Image...</p>
+                    <p className="text-xs text-gray-500 mt-1">This uses Gemini Vision AI</p>
+                  </div>
+                )}
               </div>
               <button 
                 type="submit"
-                className="w-full py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition-colors shadow-sm"
+                disabled={isTranscribing}
+                className="w-full py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition-colors shadow-sm disabled:bg-gray-400"
               >
-                Read Article
+                {isTranscribing ? 'Processing...' : 'Read Article'}
               </button>
             </form>
           )}

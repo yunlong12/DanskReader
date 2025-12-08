@@ -3,6 +3,7 @@ export interface Article {
   title: string;
   content: string; // Markdown or plain text paragraphs
   topic: string;
+  bookmarkParagraphIndex?: number;
 }
 
 export interface WordDefinition {
