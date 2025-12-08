@@ -3,7 +3,7 @@ import { generateArticle, translateWordInContext, playPronunciation } from './se
 import { Article, WordDefinition, HistoryItem, LoadingState } from './types';
 import ArticleReader from './components/ArticleReader';
 import ArticleGeneratorModal from './components/ArticleGeneratorModal';
-import { Sparkles, Volume2, Turtle, FileText } from 'lucide-react';
+import { Sparkles, Volume2, Turtle, FileText, Maximize, Minimize } from 'lucide-react';
 
 function App() {
   const [article, setArticle] = useState<Article | null>(null);
@@ -15,6 +15,7 @@ function App() {
   const [showDetailed, setShowDetailed] = useState(false);
   const [autoPlayAudio, setAutoPlayAudio] = useState(true); // Default to true as requested
   const [playbackSpeed, setPlaybackSpeed] = useState(1.0);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   
   // Ref to track the current word being played to prevent overlapping loops
   const currentPlayingWordRef = useRef<string | null>(null);
@@ -34,6 +35,15 @@ function App() {
   useEffect(() => {
     localStorage.setItem('dansk_reader_article_history', JSON.stringify(articleHistory));
   }, [articleHistory]);
+
+  // Handle fullscreen change events (e.g. user presses Esc or back button)
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
 
   // Initial load
   useEffect(() => {
@@ -158,6 +168,18 @@ function App() {
     });
   };
 
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch((e) => {
+        console.error("Error attempting to enable fullscreen:", e);
+      });
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen();
+      }
+    }
+  };
+
   const getSpeedLabel = () => {
     if (playbackSpeed === 1.0) return 'Normal Speed';
     if (playbackSpeed === 0.7) return '0.7x Speed';
@@ -168,79 +190,84 @@ function App() {
     <div className="min-h-screen bg-gray-50 flex flex-col font-sans">
       {/* Header */}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-30">
-        <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2">
+        <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between gap-2 overflow-x-auto no-scrollbar">
+          <div className="flex items-center gap-2 flex-shrink-0">
             <div className="w-8 h-8 bg-danish-red rounded-md flex items-center justify-center text-white font-bold font-serif text-xl">D</div>
             <h1 className="text-xl font-bold tracking-tight text-gray-900 flex items-baseline">
-              Dansk<span className="text-danish-red">Reader</span>
-              <span className="ml-2 text-sm text-gray-500 font-medium hidden sm:inline-block">by Doctor Wang</span>
+              <span className="hidden sm:inline">DanskReader</span>
+              <span className="sm:hidden">DR</span>
             </h1>
           </div>
           
-          <div className="flex items-center gap-2 md:gap-3">
+          <div className="flex items-center gap-2">
             {/* Auto Play Toggle */}
             <button
               onClick={() => setAutoPlayAudio(!autoPlayAudio)}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border whitespace-nowrap ${
                 autoPlayAudio 
                   ? 'bg-blue-50 text-blue-600 border-blue-200 ring-1 ring-blue-200' 
                   : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
               }`}
-              title="Auto-play audio 3 times on lookup"
             >
               <Volume2 size={14} />
-              <span className="hidden sm:inline">{autoPlayAudio ? 'Auto Play (3x)' : 'Auto Play Off'}</span>
-              <span className="sm:hidden">{autoPlayAudio ? '3x On' : '3x Off'}</span>
+              <span className="hidden lg:inline">{autoPlayAudio ? 'Auto Play (3x)' : 'Auto Play Off'}</span>
+              <span className="lg:hidden">{autoPlayAudio ? '3x' : 'Off'}</span>
             </button>
 
             {/* Speed Toggle */}
             <button
               onClick={cyclePlaybackSpeed}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border whitespace-nowrap ${
                 playbackSpeed < 1.0
                   ? 'bg-amber-50 text-amber-700 border-amber-200 ring-1 ring-amber-200' 
                   : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
               }`}
-              title="Cycle playback speed: 1.0x -> 0.7x -> 0.5x"
             >
               <Turtle size={14} />
-              <span className="hidden sm:inline">{getSpeedLabel()}</span>
-              <span className="sm:hidden">{playbackSpeed}x</span>
+              <span className="hidden lg:inline">{getSpeedLabel()}</span>
+              <span className="lg:hidden">{playbackSpeed}x</span>
             </button>
 
             {/* Detailed Toggle */}
             <button
               onClick={() => setShowDetailed(!showDetailed)}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border whitespace-nowrap ${
                 showDetailed 
                   ? 'bg-purple-50 text-purple-600 border-purple-200 ring-1 ring-purple-200' 
                   : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
               }`}
-              title="Show detailed explanation and nuances"
             >
               <FileText size={14} />
-              <span className="hidden sm:inline">{showDetailed ? 'Detailed On' : 'Detailed Off'}</span>
-              <span className="sm:hidden">{showDetailed ? 'Det. On' : 'Det. Off'}</span>
+              <span className="hidden lg:inline">{showDetailed ? 'Detailed On' : 'Detailed Off'}</span>
+              <span className="lg:hidden">Det.</span>
             </button>
 
             {/* Chinese Toggle */}
             <button
               onClick={() => setShowChinese(!showChinese)}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border whitespace-nowrap ${
                 showChinese 
                   ? 'bg-red-50 text-danish-red border-danish-red/30 ring-1 ring-danish-red/30' 
                   : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
               }`}
-              title="Toggle Chinese Translation"
             >
-              <span>🇨🇳</span>
-              <span className="hidden sm:inline">{showChinese ? '中文 On' : '中文 Off'}</span>
-              <span className="sm:hidden">{showChinese ? 'CN' : 'EN'}</span>
+              <span className="hidden sm:inline">🇨🇳</span>
+              <span className="hidden lg:inline">{showChinese ? '中文 On' : '中文 Off'}</span>
+              <span className="lg:hidden">{showChinese ? '中' : '英'}</span>
+            </button>
+
+             {/* Fullscreen Toggle */}
+             <button
+              onClick={toggleFullscreen}
+              className="flex items-center justify-center p-2 rounded-full text-gray-500 hover:bg-gray-100 border border-gray-200"
+              title={isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
+            >
+              {isFullscreen ? <Minimize size={16} /> : <Maximize size={16} />}
             </button>
 
             <button 
               onClick={() => setIsGeneratorOpen(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-full text-sm font-medium hover:bg-gray-800 transition-colors"
+              className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-full text-sm font-medium hover:bg-gray-800 transition-colors whitespace-nowrap"
             >
               <Sparkles size={16} />
               <span className="hidden md:inline">Library</span>
