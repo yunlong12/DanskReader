@@ -2,20 +2,19 @@ import React, { useState, useEffect, useRef } from 'react';
 import { generateArticle, translateWordInContext, playPronunciation } from './services/geminiService';
 import { Article, WordDefinition, HistoryItem, LoadingState } from './types';
 import ArticleReader from './components/ArticleReader';
-import HistorySidebar from './components/HistorySidebar';
 import ArticleGeneratorModal from './components/ArticleGeneratorModal';
-import { Sparkles, Menu, Volume2, Turtle } from 'lucide-react';
+import { Sparkles, Volume2, Turtle, FileText } from 'lucide-react';
 
 function App() {
   const [article, setArticle] = useState<Article | null>(null);
   const [currentDefinition, setCurrentDefinition] = useState<WordDefinition | null>(null);
-  const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [history, setHistory] = useState<HistoryItem[]>([]); // Kept for logic if needed, but UI removed
   const [loadingState, setLoadingState] = useState<LoadingState>(LoadingState.IDLE);
   const [isGeneratorOpen, setIsGeneratorOpen] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(false); // For mobile responsiveness
   const [showChinese, setShowChinese] = useState(false);
-  const [autoPlayAudio, setAutoPlayAudio] = useState(false);
-  const [isSlowAudio, setIsSlowAudio] = useState(false);
+  const [showDetailed, setShowDetailed] = useState(false);
+  const [autoPlayAudio, setAutoPlayAudio] = useState(true); // Default to true as requested
+  const [playbackSpeed, setPlaybackSpeed] = useState(1.0);
   
   // Ref to track the current word being played to prevent overlapping loops
   const currentPlayingWordRef = useRef<string | null>(null);
@@ -89,15 +88,15 @@ function App() {
     });
   };
 
-  const handleWordSelect = async (word: string, context: string) => {
-    // Open sidebar on mobile when selecting a word
-    if (window.innerWidth < 1024) {
-      setSidebarOpen(true);
-    }
+  const handleClearSelection = () => {
+    setCurrentDefinition(null);
+  };
 
+  const handleWordSelect = async (word: string, context: string) => {
     setLoadingState(LoadingState.TRANSLATING);
     setCurrentDefinition(null); // Clear previous while loading
-    // Update ref to indicate any previous playback loop should ideally stop or be ignored (logic below)
+    
+    // Update ref to indicate any previous playback loop should ideally stop or be ignored
     currentPlayingWordRef.current = word;
 
     try {
@@ -114,7 +113,7 @@ function App() {
       // Handle Auto-Play logic
       if (autoPlayAudio) {
         (async () => {
-          const speed = isSlowAudio ? 0.5 : 1.0;
+          const speed = playbackSpeed;
           // Play 3 times
           for (let i = 0; i < 3; i++) {
             // Check if the user has selected a different word in the meantime
@@ -139,6 +138,20 @@ function App() {
     }
   };
 
+  const cyclePlaybackSpeed = () => {
+    setPlaybackSpeed(prev => {
+      if (prev === 1.0) return 0.7;
+      if (prev === 0.7) return 0.5;
+      return 1.0;
+    });
+  };
+
+  const getSpeedLabel = () => {
+    if (playbackSpeed === 1.0) return 'Normal Speed';
+    if (playbackSpeed === 0.7) return '0.7x Speed';
+    return 'Slow (0.5x)';
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col font-sans">
       {/* Header */}
@@ -152,7 +165,7 @@ function App() {
             </h1>
           </div>
           
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 md:gap-3">
             {/* Auto Play Toggle */}
             <button
               onClick={() => setAutoPlayAudio(!autoPlayAudio)}
@@ -168,19 +181,34 @@ function App() {
               <span className="sm:hidden">{autoPlayAudio ? '3x On' : '3x Off'}</span>
             </button>
 
-            {/* Slow Audio Toggle */}
+            {/* Speed Toggle */}
             <button
-              onClick={() => setIsSlowAudio(!isSlowAudio)}
+              onClick={cyclePlaybackSpeed}
               className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${
-                isSlowAudio 
+                playbackSpeed < 1.0
                   ? 'bg-amber-50 text-amber-700 border-amber-200 ring-1 ring-amber-200' 
                   : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
               }`}
-              title="Play audio at 0.5x speed"
+              title="Cycle playback speed: 1.0x -> 0.7x -> 0.5x"
             >
               <Turtle size={14} />
-              <span className="hidden sm:inline">{isSlowAudio ? 'Slow (0.5x)' : 'Normal Speed'}</span>
-              <span className="sm:hidden">{isSlowAudio ? '0.5x' : '1.0x'}</span>
+              <span className="hidden sm:inline">{getSpeedLabel()}</span>
+              <span className="sm:hidden">{playbackSpeed}x</span>
+            </button>
+
+            {/* Detailed Toggle */}
+            <button
+              onClick={() => setShowDetailed(!showDetailed)}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${
+                showDetailed 
+                  ? 'bg-purple-50 text-purple-600 border-purple-200 ring-1 ring-purple-200' 
+                  : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
+              }`}
+              title="Show detailed explanation and nuances"
+            >
+              <FileText size={14} />
+              <span className="hidden sm:inline">{showDetailed ? 'Detailed On' : 'Detailed Off'}</span>
+              <span className="sm:hidden">{showDetailed ? 'Det. On' : 'Det. Off'}</span>
             </button>
 
             {/* Chinese Toggle */}
@@ -195,6 +223,7 @@ function App() {
             >
               <span>🇨🇳</span>
               <span className="hidden sm:inline">{showChinese ? '中文 On' : '中文 Off'}</span>
+              <span className="sm:hidden">{showChinese ? 'CN' : 'EN'}</span>
             </button>
 
             <button 
@@ -202,14 +231,7 @@ function App() {
               className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-full text-sm font-medium hover:bg-gray-800 transition-colors"
             >
               <Sparkles size={16} />
-              <span className="hidden sm:inline">Open Library</span>
-              <span className="sm:hidden">Library</span>
-            </button>
-            <button 
-              className="lg:hidden p-2 text-gray-600"
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-            >
-              <Menu size={24} />
+              <span className="hidden md:inline">Library</span>
             </button>
           </div>
         </div>
@@ -217,44 +239,18 @@ function App() {
 
       {/* Main Content */}
       <div className="flex-1 max-w-7xl w-full mx-auto flex relative items-start">
-        
-        {/* Article Area */}
         <main className="flex-1 p-4 md:p-8 w-full min-w-0">
           <ArticleReader 
             article={article}
             onWordSelect={handleWordSelect}
+            onClearSelection={handleClearSelection}
             isLoading={loadingState === LoadingState.GENERATING_ARTICLE}
             onGenerateNew={() => setIsGeneratorOpen(true)}
+            currentDefinition={currentDefinition}
+            isTranslating={loadingState === LoadingState.TRANSLATING}
+            showDetailed={showDetailed}
           />
         </main>
-
-        {/* Sidebar - Responsive */}
-        <div className={`
-          fixed inset-y-0 right-0 z-40 transform transition-transform duration-300 ease-in-out lg:translate-x-0 
-          lg:sticky lg:top-16 lg:h-[calc(100vh-64px)]
-          ${sidebarOpen ? 'translate-x-0' : 'translate-x-full'}
-          w-full sm:w-96 shadow-2xl lg:shadow-none bg-white lg:bg-transparent
-        `}>
-          <div className="h-full flex flex-col">
-             <div className="lg:hidden p-4 border-b flex justify-end">
-               <button onClick={() => setSidebarOpen(false)} className="text-gray-500">Close</button>
-             </div>
-             <HistorySidebar 
-                currentDefinition={currentDefinition} 
-                history={history}
-                isLoading={loadingState === LoadingState.TRANSLATING}
-                playbackSpeed={isSlowAudio ? 0.5 : 1.0}
-             />
-          </div>
-        </div>
-
-        {/* Overlay for mobile sidebar */}
-        {sidebarOpen && (
-          <div 
-            className="fixed inset-0 bg-black/20 z-30 lg:hidden"
-            onClick={() => setSidebarOpen(false)}
-          />
-        )}
       </div>
 
       <ArticleGeneratorModal 

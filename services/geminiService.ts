@@ -57,8 +57,8 @@ export const translateWordInContext = async (textToTranslate: string, contextSen
         instructions += ` Also provide the Simplified Chinese translation.`;
     }
     
-    // Explicitly instruct to act like Google Translate
-    instructions += ` You are a strict translator tool. Provide direct, standard dictionary definitions. Do not include explanatory filler text.`;
+    // Explicitly instruct to act like Google Translate for the main fields, but allow detail in the explanation field
+    instructions += ` You are a translator tool. For the 'translation' field, act like Google Translate: direct and standard. For the 'detailedExplanation' field, act like a language tutor: explain nuances, usage, and synonyms.`;
     
     const contextInstruction = `The text appears in this context: "${contextSentence}". Provide the most appropriate meaning for this specific context.`;
     
@@ -69,14 +69,16 @@ export const translateWordInContext = async (textToTranslate: string, contextSen
       translation: { type: Type.STRING, description: "The definition/translation in English. MUST be in English. Direct translation only." },
       pronunciation: { type: Type.STRING, description: "IPA pronunciation or phonetic transcription." },
       partOfSpeech: { type: Type.STRING, description: "Grammatical type (noun, verb, etc) or 'Sentence'/'Phrase'." },
-      exampleSentence: { type: Type.STRING, description: "A simple example sentence in Danish using the word. If the input is already a sentence, return the input itself." },
+      detailedExplanation: { type: Type.STRING, description: "A detailed explanation of the meaning, nuances, synonyms, and grammatical usage notes in English." }
     };
 
-    const requiredFields = ["translation", "pronunciation", "partOfSpeech", "exampleSentence"];
+    const requiredFields = ["translation", "pronunciation", "partOfSpeech", "detailedExplanation"];
 
     if (includeChinese) {
       schemaProperties.chineseTranslation = { type: Type.STRING, description: "The definition/translation in Simplified Chinese. MUST be in Chinese. Direct translation only." };
+      schemaProperties.detailedChineseExplanation = { type: Type.STRING, description: "A detailed explanation of the meaning, nuances, synonyms, and grammatical usage notes in Simplified Chinese." };
       requiredFields.push("chineseTranslation");
+      requiredFields.push("detailedChineseExplanation");
     }
 
     const translationSchema: Schema = {
@@ -91,7 +93,7 @@ export const translateWordInContext = async (textToTranslate: string, contextSen
       config: {
         responseMimeType: "application/json",
         responseSchema: translationSchema,
-        temperature: 0.1, // Very low temperature for deterministic, standard translations
+        temperature: 0.1, // Low temperature for consistent translations
       },
     });
 
@@ -107,7 +109,8 @@ export const translateWordInContext = async (textToTranslate: string, contextSen
       chineseTranslation: json.chineseTranslation,
       pronunciation: json.pronunciation,
       partOfSpeech: json.partOfSpeech,
-      exampleSentence: json.exampleSentence,
+      detailedExplanation: json.detailedExplanation,
+      detailedChineseExplanation: json.detailedChineseExplanation,
     };
   } catch (error) {
     console.error("Error translating word:", error);

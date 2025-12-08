@@ -12,7 +12,9 @@ export interface WordDefinition {
   pronunciation: string;
   partOfSpeech: string;
   contextParams: string;
-  exampleSentence: string;
+  exampleSentence?: string;
+  detailedExplanation?: string;
+  detailedChineseExplanation?: string;
 }
 
 export interface HistoryItem extends WordDefinition {
