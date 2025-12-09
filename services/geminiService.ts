@@ -16,7 +16,7 @@ const articleSchema: Schema = {
 export const generateArticle = async (topic: string): Promise<Article> => {
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: "gemini-2.5-flash-lite",
       contents: `Write a short, engaging news article in Danish about "${topic}". 
       It should be suitable for an intermediate language learner (B1/B2 level). 
       Keep it around 200-300 words.`,
@@ -47,7 +47,7 @@ export const generateArticle = async (topic: string): Promise<Article> => {
 export const transcribeImage = async (base64Image: string, mimeType: string): Promise<string> => {
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: "gemini-2.5-flash-lite",
       contents: [
         {
           inlineData: {
@@ -112,7 +112,7 @@ export const translateWordInContext = async (textToTranslate: string, contextSen
     };
 
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: "gemini-2.5-flash-lite",
       contents: prompt,
       config: {
         responseMimeType: "application/json",
