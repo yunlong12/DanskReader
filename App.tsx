@@ -283,9 +283,9 @@ function App() {
             </h1>
           </div>
           
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-shrink-0">
             {/* Text Size Control */}
-            <div className="flex items-center border border-gray-200 rounded-full bg-white mr-1 hidden sm:flex">
+            <div className="flex items-center border border-gray-200 rounded-full bg-white mr-1 flex-shrink-0">
               <button onClick={handleDecreaseTextSize} className="px-2 py-1.5 hover:bg-gray-50 text-gray-500 rounded-l-full">
                 <Minus size={14} />
               </button>
@@ -296,19 +296,11 @@ function App() {
                 <Plus size={14} />
               </button>
             </div>
-             {/* Mobile Text Size Control (simplified) */}
-             <button 
-              onClick={handleIncreaseTextSize} 
-              className="sm:hidden p-2 rounded-full text-gray-500 border border-gray-200"
-              title="Increase text size"
-            >
-               <Type size={16} />
-            </button>
 
             {/* Theme Toggle */}
             <button
               onClick={cycleTheme}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border whitespace-nowrap ${
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border whitespace-nowrap flex-shrink-0 ${
                 readingTheme === 'sepia' ? 'bg-[#f4ecd8] text-amber-900 border-amber-200' :
                 readingTheme === 'dark' ? 'bg-gray-800 text-gray-200 border-gray-700' :
                 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
@@ -316,69 +308,65 @@ function App() {
               title="Change Theme"
             >
               <Palette size={14} />
-              <span className="hidden lg:inline">{getThemeLabel()}</span>
+              <span>{getThemeLabel()}</span>
             </button>
 
             {/* Auto Play Toggle */}
             <button
               onClick={() => setAutoPlayAudio(!autoPlayAudio)}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border whitespace-nowrap ${
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border whitespace-nowrap flex-shrink-0 ${
                 autoPlayAudio 
                   ? 'bg-blue-50 text-blue-600 border-blue-200 ring-1 ring-blue-200' 
                   : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
               }`}
             >
               <Volume2 size={14} />
-              <span className="hidden lg:inline">{autoPlayAudio ? 'Auto Play (3x)' : 'Auto Play Off'}</span>
-              <span className="lg:hidden">{autoPlayAudio ? '3x' : 'Off'}</span>
+              <span>{autoPlayAudio ? 'Auto Play (3x)' : 'Auto Play Off'}</span>
             </button>
 
             {/* Speed Toggle */}
             <button
               onClick={cyclePlaybackSpeed}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border whitespace-nowrap ${
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border whitespace-nowrap flex-shrink-0 ${
                 playbackSpeed < 1.0
                   ? 'bg-amber-50 text-amber-700 border-amber-200 ring-1 ring-amber-200' 
                   : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
               }`}
             >
               <Turtle size={14} />
-              <span className="hidden lg:inline">{getSpeedLabel()}</span>
-              <span className="lg:hidden">{playbackSpeed}x</span>
+              <span>{getSpeedLabel()}</span>
             </button>
 
             {/* Detailed Toggle */}
             <button
               onClick={() => setShowDetailed(!showDetailed)}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border whitespace-nowrap ${
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border whitespace-nowrap flex-shrink-0 ${
                 showDetailed 
                   ? 'bg-purple-50 text-purple-600 border-purple-200 ring-1 ring-purple-200' 
                   : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
               }`}
             >
               <FileText size={14} />
-              <span className="hidden lg:inline">{showDetailed ? 'Detailed On' : 'Detailed Off'}</span>
-              <span className="lg:hidden">Det.</span>
+              <span>{showDetailed ? 'Detailed On' : 'Detailed Off'}</span>
             </button>
 
-            {/* Language Toggle (Changed to switch between English and Chinese) */}
+            {/* Language Toggle */}
             <button
               onClick={toggleLanguage}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border whitespace-nowrap ${
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border whitespace-nowrap flex-shrink-0 ${
                 targetLang === 'zh'
                   ? 'bg-red-50 text-danish-red border-danish-red/30 ring-1 ring-danish-red/30' 
                   : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
               }`}
             >
               <Languages size={14} />
-              <span className="hidden lg:inline">{targetLang === 'en' ? 'English' : 'Chinese'}</span>
-              <span className="lg:hidden">{targetLang === 'en' ? 'EN' : '中'}</span>
+              <span>{targetLang === 'en' ? 'English' : 'Chinese'}</span>
             </button>
 
              {/* Fullscreen Toggle */}
              <button
               onClick={toggleFullscreen}
-              className="flex items-center justify-center p-2 rounded-full text-gray-500 hover:bg-gray-100 border border-gray-200"
+              className="flex items-center justify-center p-2 rounded-full text-gray-500 hover:bg-gray-100 border border-gray-200 flex-shrink-0"
               title={isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
             >
               {isFullscreen ? <Minimize size={16} /> : <Maximize size={16} />}
@@ -386,10 +374,10 @@ function App() {
 
             <button 
               onClick={() => setIsGeneratorOpen(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-full text-sm font-medium hover:bg-gray-800 transition-colors whitespace-nowrap"
+              className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-full text-sm font-medium hover:bg-gray-800 transition-colors whitespace-nowrap flex-shrink-0"
             >
               <Sparkles size={16} />
-              <span className="hidden md:inline">Library</span>
+              <span>Library</span>
             </button>
           </div>
         </div>
