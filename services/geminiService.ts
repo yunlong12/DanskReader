@@ -68,7 +68,58 @@ export const transcribeImage = async (base64Image: string, mimeType: string): Pr
   }
 };
 
-export const translateWordInContext = async (textToTranslate: string, contextSentence: string, includeChinese: boolean = false): Promise<WordDefinition> => {
+// Helper to fetch from Google Translate (Unofficial)
+const fetchGoogleTranslation = async (text: string, targetLang: string): Promise<string> => {
+  // Using client=gtx endpoint
+  const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=da&tl=${targetLang}&dt=t&q=${encodeURIComponent(text)}`;
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Google Translate API failed: ${response.statusText}`);
+  }
+  const data = await response.json();
+  // The structure is typically [[["Translation", "Original", null, null, 1]], ...]
+  // We want the first part of the first sentence
+  return data?.[0]?.[0]?.[0] || "";
+};
+
+export const translateWordInContext = async (
+  textToTranslate: string, 
+  contextSentence: string, 
+  includeChinese: boolean = false,
+  requestDetailed: boolean = false
+): Promise<WordDefinition> => {
+  
+  // HYBRID STRATEGY:
+  // If detailed explanation is NOT requested, try to use Google Translate first (Free, 0 tokens).
+  // If that fails (e.g. network/CORS), or if detailed explanation IS requested, use Gemini.
+  if (!requestDetailed) {
+    try {
+      const promises = [fetchGoogleTranslation(textToTranslate, 'en')];
+      if (includeChinese) {
+        promises.push(fetchGoogleTranslation(textToTranslate, 'zh-CN'));
+      }
+
+      const results = await Promise.all(promises);
+      const enTranslation = results[0];
+      const cnTranslation = includeChinese ? results[1] : undefined;
+
+      if (enTranslation) {
+        return {
+          word: textToTranslate,
+          contextParams: contextSentence,
+          translation: enTranslation,
+          chineseTranslation: cnTranslation,
+          pronunciation: "", // GT simple endpoint doesn't return IPA easily
+          partOfSpeech: "Text", // Generic fallback
+          // No detailed explanations
+        };
+      }
+    } catch (error) {
+      console.warn("Google Translate failed, falling back to Gemini", error);
+      // Fallback to Gemini below
+    }
+  }
+
   try {
     const isPhrase = textToTranslate.trim().includes(' ');
     

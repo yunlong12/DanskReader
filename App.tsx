@@ -126,7 +126,8 @@ function App() {
     setCurrentDefinition(null); // Clear previous while loading
     
     try {
-      const definition = await translateWordInContext(word, context, showChinese);
+      // Pass showDetailed to determine whether to use Google Translate (False) or Gemini (True)
+      const definition = await translateWordInContext(word, context, showChinese, showDetailed);
       
       // Check if a new request has started since we began. 
       // If so, abort this one to prevent stale UI updates.
