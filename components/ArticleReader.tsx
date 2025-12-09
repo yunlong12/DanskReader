@@ -1,6 +1,6 @@
 import React, { useCallback, useState, useEffect, useRef } from 'react';
 import { Article, WordDefinition } from '../types';
-import { BookOpen, RefreshCw, Loader2, Bookmark, GripHorizontal } from 'lucide-react';
+import { BookOpen, RefreshCw, Loader2, Bookmark, GripHorizontal, X } from 'lucide-react';
 
 interface ArticleReaderProps {
   article: Article | null;
@@ -203,6 +203,9 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
 
   // --- Drag Handling Logic ---
   const handlePointerDown = (e: React.PointerEvent) => {
+    // Only allow left click for drag
+    if (e.button !== 0) return;
+    
     e.preventDefault();
     e.stopPropagation();
     isDraggingRef.current = true;
@@ -350,12 +353,33 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
           className="mb-2"
         >
           <div className="bg-white rounded-lg shadow-xl border border-gray-200 w-72 md:w-80 animate-in fade-in zoom-in duration-200 overflow-hidden flex flex-col max-h-[400px]">
-            {/* Top Drag Handle */}
+            {/* Top Drag Handle Header */}
             <div 
-              onPointerDown={handlePointerDown}
-              className="h-6 bg-gray-50 border-b border-gray-100 flex items-center justify-center cursor-move touch-none hover:bg-gray-100 transition-colors shrink-0"
+              className="h-8 bg-gray-50 border-b border-gray-100 flex items-center justify-between px-2 shrink-0 select-none"
             >
-              <GripHorizontal size={16} className="text-gray-300" />
+              {/* Spacer for balance */}
+              <div className="w-6" />
+
+              {/* Grip Handle - Draggable */}
+              <div 
+                onPointerDown={handlePointerDown}
+                className="flex-1 flex items-center justify-center cursor-move h-full touch-none hover:bg-gray-100 transition-colors"
+              >
+                <GripHorizontal size={16} className="text-gray-300" />
+              </div>
+
+              {/* Close Button */}
+              <button
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onClearSelection();
+                }}
+                className="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
+                title="Close"
+              >
+                <X size={16} />
+              </button>
             </div>
 
             <div className="p-4 pt-2 flex-1 overflow-hidden flex flex-col">
