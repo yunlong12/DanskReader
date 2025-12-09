@@ -3,14 +3,15 @@ import { generateArticle, translateWordInContext, playPronunciation } from './se
 import { Article, WordDefinition, HistoryItem, LoadingState } from './types';
 import ArticleReader from './components/ArticleReader';
 import ArticleGeneratorModal from './components/ArticleGeneratorModal';
-import { Sparkles, Volume2, Turtle, FileText, Maximize, Minimize, Plus, Minus, Type, Languages } from 'lucide-react';
+import { Sparkles, Volume2, Turtle, FileText, Maximize, Minimize, Plus, Minus, Type, Languages, Palette } from 'lucide-react';
 
 const DEFAULT_SETTINGS = {
   targetLang: 'en' as 'en' | 'zh',
   showDetailed: false,
   autoPlayAudio: true,
   playbackSpeed: 1.0,
-  textSize: 1.0
+  textSize: 1.0,
+  readingTheme: 'light' as 'light' | 'sepia' | 'dark'
 };
 
 function App() {
@@ -41,6 +42,7 @@ function App() {
   const [autoPlayAudio, setAutoPlayAudio] = useState(initialSettings.autoPlayAudio);
   const [playbackSpeed, setPlaybackSpeed] = useState(initialSettings.playbackSpeed);
   const [textSize, setTextSize] = useState(initialSettings.textSize);
+  const [readingTheme, setReadingTheme] = useState<'light' | 'sepia' | 'dark'>(initialSettings.readingTheme);
   
   // Ref to track the current request ID to prevent overlapping loops/race conditions
   const currentRequestIdRef = useRef<number>(0);
@@ -68,10 +70,11 @@ function App() {
       showDetailed,
       autoPlayAudio,
       playbackSpeed,
-      textSize
+      textSize,
+      readingTheme
     };
     localStorage.setItem('dansk_reader_settings', JSON.stringify(settingsToSave));
-  }, [targetLang, showDetailed, autoPlayAudio, playbackSpeed, textSize]);
+  }, [targetLang, showDetailed, autoPlayAudio, playbackSpeed, textSize, readingTheme]);
 
   // Handle fullscreen change events (e.g. user presses Esc or back button)
   useEffect(() => {
@@ -230,6 +233,14 @@ function App() {
       return next < 0.5 ? 0.5 : parseFloat(next.toFixed(1));
     });
   };
+  
+  const cycleTheme = () => {
+    setReadingTheme(prev => {
+      if (prev === 'light') return 'sepia';
+      if (prev === 'sepia') return 'dark';
+      return 'light';
+    });
+  };
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
@@ -251,6 +262,12 @@ function App() {
     if (playbackSpeed === 1.0) return 'Normal Speed';
     if (playbackSpeed === 0.7) return '0.7x Speed';
     return 'Slow (0.5x)';
+  };
+  
+  const getThemeLabel = () => {
+    if (readingTheme === 'light') return 'Light';
+    if (readingTheme === 'sepia') return 'Sepia';
+    return 'Dark';
   };
 
   return (
@@ -286,6 +303,20 @@ function App() {
               title="Increase text size"
             >
                <Type size={16} />
+            </button>
+
+            {/* Theme Toggle */}
+            <button
+              onClick={cycleTheme}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border whitespace-nowrap ${
+                readingTheme === 'sepia' ? 'bg-[#f4ecd8] text-amber-900 border-amber-200' :
+                readingTheme === 'dark' ? 'bg-gray-800 text-gray-200 border-gray-700' :
+                'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
+              }`}
+              title="Change Theme"
+            >
+              <Palette size={14} />
+              <span className="hidden lg:inline">{getThemeLabel()}</span>
             </button>
 
             {/* Auto Play Toggle */}
@@ -379,6 +410,7 @@ function App() {
             onSetBookmark={handleSetBookmark}
             textSize={textSize}
             targetLang={targetLang}
+            readingTheme={readingTheme}
           />
         </main>
       </div>

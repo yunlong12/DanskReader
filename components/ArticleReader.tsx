@@ -14,6 +14,7 @@ interface ArticleReaderProps {
   onSetBookmark: (index: number) => void;
   textSize: number;
   targetLang: 'en' | 'zh';
+  readingTheme: 'light' | 'sepia' | 'dark';
 }
 
 const ArticleReader: React.FC<ArticleReaderProps> = ({ 
@@ -27,7 +28,8 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
   showDetailed,
   onSetBookmark,
   textSize,
-  targetLang
+  targetLang,
+  readingTheme
 }) => {
   const [selectionRect, setSelectionRect] = useState<DOMRect | null>(null);
   // Track window width to ensure popover calculations are accurate on resize/rotation
@@ -220,6 +222,39 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
   // Split content by newlines to render paragraphs
   const paragraphs = article.content.split('\n').filter(p => p.trim() !== '');
 
+  // Define theme styles
+  const getThemeStyles = () => {
+    switch (readingTheme) {
+      case 'sepia':
+        return {
+          container: 'bg-[#F9F7F1] border-[#E8E4D9]',
+          text: 'text-[#433422]',
+          header: 'border-[#E8E4D9]',
+          meta: 'text-[#8C7B66]',
+          bookmarkActive: 'bg-[#EFEDE0]'
+        };
+      case 'dark':
+        return {
+          container: 'bg-gray-900 border-gray-800',
+          text: 'text-gray-300',
+          header: 'border-gray-800',
+          meta: 'text-gray-500',
+          bookmarkActive: 'bg-gray-800'
+        };
+      case 'light':
+      default:
+        return {
+          container: 'bg-white border-gray-100',
+          text: 'text-gray-800',
+          header: 'border-gray-100',
+          meta: 'text-gray-400',
+          bookmarkActive: 'bg-amber-50'
+        };
+    }
+  };
+
+  const themeStyles = getThemeStyles();
+
   // Render logic for popover placement
   const renderPopover = () => {
     if (!selectionRect || (!isTranslating && !currentDefinition)) return null;
@@ -285,7 +320,7 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
                 <span className="text-sm font-medium">Translating...</span>
               </div>
             ) : currentDefinition && (
-              <div className="overflow-y-auto pr-1 custom-scrollbar">
+              <div className="overflow-y-auto pr-1 custom-scrollbar text-gray-900">
                 <div className="flex items-start justify-between mb-1">
                   <h3 className="font-bold text-danish-red text-xl leading-tight break-words pr-2">
                     {currentDefinition.word}
@@ -329,16 +364,16 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
   return (
     <div className="relative">
       <div 
-        className="max-w-3xl mx-auto bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden min-h-[600px]"
+        className={`max-w-3xl mx-auto rounded-xl shadow-sm border overflow-hidden min-h-[600px] transition-colors duration-300 ${themeStyles.container}`}
         onClick={handleClick}
         onMouseUp={handleMouseUp}
         onDoubleClick={(e) => e.preventDefault()}
         onContextMenu={(e) => e.preventDefault()}
       >
         {/* Article Header */}
-        <div className="p-8 pb-4 border-b border-gray-100">
+        <div className={`p-8 pb-4 border-b ${themeStyles.header}`}>
           <div className="flex justify-between items-start mb-4">
-            <span className="px-3 py-1 bg-gray-100 text-gray-600 text-xs font-bold uppercase tracking-wider rounded-full">
+            <span className="px-3 py-1 bg-gray-100/50 text-gray-600 text-xs font-bold uppercase tracking-wider rounded-full">
               {article.topic}
             </span>
             <button 
@@ -347,21 +382,21 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
                 onGenerateNew();
               }}
               disabled={isLoading}
-              className="text-gray-400 hover:text-danish-red transition-colors p-1"
+              className={`hover:text-danish-red transition-colors p-1 ${themeStyles.meta}`}
               title="New article"
             >
               <RefreshCw size={20} className={isLoading ? "animate-spin" : ""} />
             </button>
           </div>
-          <h1 className="text-3xl md:text-4xl font-serif font-bold text-gray-900 leading-tight mb-2">
+          <h1 className={`text-3xl md:text-4xl font-serif font-bold leading-tight mb-2 ${readingTheme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
             {article.title}
           </h1>
-          <p className="text-sm text-gray-400 italic">Click a word or select a sentence to translate</p>
+          <p className={`text-sm italic ${themeStyles.meta}`}>Click a word or select a sentence to translate</p>
         </div>
 
         {/* Article Body */}
         <div 
-          className="p-8 pt-6 font-serif leading-relaxed text-gray-800 space-y-6 selection:bg-yellow-200 selection:text-black cursor-text"
+          className={`p-8 pt-6 font-serif leading-relaxed space-y-6 selection:bg-yellow-200 selection:text-black cursor-text ${themeStyles.text}`}
           style={{ 
              fontSize: `${textSize * 1.125}rem`,
              lineHeight: 1.8 
@@ -379,7 +414,7 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
                     className={`transition-all duration-200 ${
                        article.bookmarkParagraphIndex === index 
                         ? 'text-danish-red opacity-100 scale-100' 
-                        : 'text-gray-200 opacity-0 group-hover:opacity-100 hover:text-danish-red/70 scale-90 hover:scale-100'
+                        : `text-gray-400 opacity-0 group-hover:opacity-100 hover:text-danish-red/70 scale-90 hover:scale-100`
                     }`}
                     title={article.bookmarkParagraphIndex === index ? "Bookmarked" : "Bookmark this paragraph"}
                   >
@@ -391,7 +426,7 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
                <p
                  ref={el => { paragraphRefs.current[index] = el; }}
                  className={`transition-colors duration-500 rounded-lg px-2 -mx-2 flex-1 ${
-                    article.bookmarkParagraphIndex === index ? 'bg-amber-50' : ''
+                    article.bookmarkParagraphIndex === index ? themeStyles.bookmarkActive : ''
                  }`}
                >
                  {paragraph}
