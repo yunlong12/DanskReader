@@ -15,6 +15,7 @@ interface ArticleReaderProps {
   textSize: number;
   targetLang: 'en' | 'zh';
   readingTheme: 'light' | 'sepia' | 'dark';
+  bookmarksEnabled: boolean;
 }
 
 const ArticleReader: React.FC<ArticleReaderProps> = ({ 
@@ -29,7 +30,8 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
   onSetBookmark,
   textSize,
   targetLang,
-  readingTheme
+  readingTheme,
+  bookmarksEnabled
 }) => {
   const [selectionRect, setSelectionRect] = useState<DOMRect | null>(null);
   // Track window width to ensure popover calculations are accurate on resize/rotation
@@ -37,6 +39,9 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
   
   // Refs for auto-scrolling to bookmark
   const paragraphRefs = useRef<(HTMLParagraphElement | null)[]>([]);
+
+  // Flag to prevent 'click' event from firing immediately after a selection is made on mobile
+  const isSelectingRef = useRef(false);
 
   useEffect(() => {
     const handleResize = () => setWindowWidth(window.innerWidth);
@@ -78,6 +83,11 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
         return;
       }
 
+      // Mark that a selection action took place to prevent conflict with click
+      isSelectingRef.current = true;
+      // Reset after click event would have fired (approx 300ms for mobile taps)
+      setTimeout(() => { isSelectingRef.current = false; }, 500);
+
       // If it's just a single word selected via double-click drag, we can ignore it 
       // or handle it. But usually drag is for phrases.
       // Let's allow it, but we mostly care about phrases here.
@@ -117,6 +127,9 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
   }, [onWordSelect]);
 
   const handleClick = useCallback((e: React.MouseEvent) => {
+    // Check if we just processed a selection drag, if so, ignore this click
+    if (isSelectingRef.current) return;
+
     // If user has actively selected text (dragged), don't trigger single word lookup
     const selection = window.getSelection();
     if (selection && !selection.isCollapsed && selection.toString().trim().length > 0) {
@@ -369,8 +382,8 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
         className={`max-w-3xl mx-auto rounded-xl shadow-sm border overflow-hidden min-h-[600px] transition-colors duration-300 ${themeStyles.container}`}
         onClick={handleClick}
         onMouseUp={handleMouseUp}
+        onTouchEnd={handleMouseUp}
         onDoubleClick={(e) => e.preventDefault()}
-        onContextMenu={(e) => e.preventDefault()}
       >
         {/* Article Header */}
         <div className={`p-8 pb-4 border-b ${themeStyles.header}`}>
@@ -404,37 +417,46 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
              lineHeight: 1.8 
           }}
         >
-          {paragraphs.map((paragraph, index) => (
+          {paragraphs.map((paragraph, index) => {
+            const isBookmarked = article.bookmarkParagraphIndex === index;
+            const showBookmarkUI = bookmarksEnabled || isBookmarked;
+            
+            return (
             <div key={index} className="flex gap-3 group relative">
                {/* Bookmark Button */}
                <div className="w-8 flex-shrink-0 flex justify-end pt-1.5 select-none">
-                  <button
-                    onClick={(e) => {
-                       e.stopPropagation(); 
-                       onSetBookmark(index);
-                    }}
-                    className={`transition-all duration-200 ${
-                       article.bookmarkParagraphIndex === index 
-                        ? 'text-danish-red opacity-100 scale-100' 
-                        : `text-gray-400 opacity-0 group-hover:opacity-100 hover:text-danish-red/70 scale-90 hover:scale-100`
-                    }`}
-                    title={article.bookmarkParagraphIndex === index ? "Bookmarked" : "Bookmark this paragraph"}
-                  >
-                     <Bookmark size={20} fill={article.bookmarkParagraphIndex === index ? "currentColor" : "none"} />
-                  </button>
+                  {showBookmarkUI && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation(); 
+                        if (bookmarksEnabled) {
+                          onSetBookmark(index);
+                        }
+                      }}
+                      className={`transition-all duration-200 ${
+                        isBookmarked
+                          ? 'text-danish-red opacity-100 scale-100' 
+                          : `text-gray-400 opacity-0 group-hover:opacity-100 hover:text-danish-red/70 scale-90 hover:scale-100`
+                      } ${!bookmarksEnabled && isBookmarked ? 'cursor-default' : 'cursor-pointer'}`}
+                      title={isBookmarked ? "Bookmarked" : "Bookmark this paragraph"}
+                      disabled={!bookmarksEnabled && isBookmarked}
+                    >
+                      <Bookmark size={20} fill={isBookmarked ? "currentColor" : "none"} />
+                    </button>
+                  )}
                </div>
                
                {/* Paragraph Text */}
                <p
                  ref={el => { paragraphRefs.current[index] = el; }}
                  className={`transition-colors duration-500 rounded-lg px-2 -mx-2 flex-1 ${
-                    article.bookmarkParagraphIndex === index ? themeStyles.bookmarkActive : ''
+                    isBookmarked ? themeStyles.bookmarkActive : ''
                  }`}
                >
                  {paragraph}
                </p>
             </div>
-          ))}
+          )})}
         </div>
       </div>
 

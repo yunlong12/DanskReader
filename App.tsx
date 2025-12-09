@@ -3,7 +3,7 @@ import { generateArticle, translateWordInContext, playPronunciation, stopAudio }
 import { Article, WordDefinition, HistoryItem, LoadingState } from './types';
 import ArticleReader from './components/ArticleReader';
 import ArticleGeneratorModal from './components/ArticleGeneratorModal';
-import { Sparkles, Volume2, Turtle, FileText, Maximize, Minimize, Plus, Minus, Type, Languages, Palette, VolumeX } from 'lucide-react';
+import { Sparkles, Volume2, Turtle, FileText, Maximize, Minimize, Plus, Minus, Type, Languages, Palette, VolumeX, Bookmark } from 'lucide-react';
 
 const DEFAULT_SETTINGS = {
   targetLang: 'en' as 'en' | 'zh',
@@ -11,7 +11,8 @@ const DEFAULT_SETTINGS = {
   autoPlayCount: 3,
   playbackSpeed: 1.0,
   textSize: 1.0,
-  readingTheme: 'light' as 'light' | 'sepia' | 'dark'
+  readingTheme: 'light' as 'light' | 'sepia' | 'dark',
+  bookmarksEnabled: false
 };
 
 function App() {
@@ -52,6 +53,7 @@ function App() {
   const [playbackSpeed, setPlaybackSpeed] = useState(initialSettings.playbackSpeed);
   const [textSize, setTextSize] = useState(initialSettings.textSize);
   const [readingTheme, setReadingTheme] = useState<'light' | 'sepia' | 'dark'>(initialSettings.readingTheme);
+  const [bookmarksEnabled, setBookmarksEnabled] = useState(initialSettings.bookmarksEnabled);
   
   // Ref to track the current request ID to prevent overlapping loops/race conditions
   const currentRequestIdRef = useRef<number>(0);
@@ -80,10 +82,11 @@ function App() {
       autoPlayCount,
       playbackSpeed,
       textSize,
-      readingTheme
+      readingTheme,
+      bookmarksEnabled
     };
     localStorage.setItem('dansk_reader_settings', JSON.stringify(settingsToSave));
-  }, [targetLang, showDetailed, autoPlayCount, playbackSpeed, textSize, readingTheme]);
+  }, [targetLang, showDetailed, autoPlayCount, playbackSpeed, textSize, readingTheme, bookmarksEnabled]);
 
   // Handle fullscreen change events (e.g. user presses Esc or back button)
   useEffect(() => {
@@ -376,6 +379,19 @@ function App() {
               <FileText size={14} />
               <span>{showDetailed ? 'Detailed On' : 'Detailed Off'}</span>
             </button>
+            
+            {/* Bookmarks Toggle */}
+            <button
+              onClick={() => setBookmarksEnabled(!bookmarksEnabled)}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border whitespace-nowrap flex-shrink-0 ${
+                bookmarksEnabled
+                  ? 'bg-teal-50 text-teal-600 border-teal-200 ring-1 ring-teal-200' 
+                  : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
+              }`}
+            >
+              <Bookmark size={14} fill={bookmarksEnabled ? "currentColor" : "none"}/>
+              <span>{bookmarksEnabled ? 'Bookmarks On' : 'Bookmarks Off'}</span>
+            </button>
 
             {/* Language Toggle */}
             <button
@@ -426,6 +442,7 @@ function App() {
             textSize={textSize}
             targetLang={targetLang}
             readingTheme={readingTheme}
+            bookmarksEnabled={bookmarksEnabled}
           />
         </main>
       </div>
