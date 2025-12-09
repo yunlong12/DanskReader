@@ -3,7 +3,7 @@ import { generateArticle, translateWordInContext, playPronunciation } from './se
 import { Article, WordDefinition, HistoryItem, LoadingState } from './types';
 import ArticleReader from './components/ArticleReader';
 import ArticleGeneratorModal from './components/ArticleGeneratorModal';
-import { Sparkles, Volume2, Turtle, FileText, Maximize, Minimize, Plus, Minus, Type } from 'lucide-react';
+import { Sparkles, Volume2, Turtle, FileText, Maximize, Minimize, Plus, Minus, Type, Languages } from 'lucide-react';
 
 function App() {
   const [article, setArticle] = useState<Article | null>(null);
@@ -11,7 +11,7 @@ function App() {
   const [history, setHistory] = useState<HistoryItem[]>([]); // Kept for logic if needed, but UI removed
   const [loadingState, setLoadingState] = useState<LoadingState>(LoadingState.IDLE);
   const [isGeneratorOpen, setIsGeneratorOpen] = useState(false);
-  const [showChinese, setShowChinese] = useState(false);
+  const [targetLang, setTargetLang] = useState<'en' | 'zh'>('en'); // Changed from showChinese boolean
   const [showDetailed, setShowDetailed] = useState(false);
   const [autoPlayAudio, setAutoPlayAudio] = useState(true); // Default to true as requested
   const [playbackSpeed, setPlaybackSpeed] = useState(1.0);
@@ -126,8 +126,8 @@ function App() {
     setCurrentDefinition(null); // Clear previous while loading
     
     try {
-      // Pass showDetailed to determine whether to use Google Translate (False) or Gemini (True)
-      const definition = await translateWordInContext(word, context, showChinese, showDetailed);
+      // Pass targetLang to determine whether to fetch English or Chinese
+      const definition = await translateWordInContext(word, context, targetLang, showDetailed);
       
       // Check if a new request has started since we began. 
       // If so, abort this one to prevent stale UI updates.
@@ -207,6 +207,10 @@ function App() {
         document.exitFullscreen();
       }
     }
+  };
+  
+  const toggleLanguage = () => {
+    setTargetLang(prev => prev === 'en' ? 'zh' : 'en');
   };
 
   const getSpeedLabel = () => {
@@ -292,18 +296,18 @@ function App() {
               <span className="lg:hidden">Det.</span>
             </button>
 
-            {/* Chinese Toggle */}
+            {/* Language Toggle (Changed to switch between English and Chinese) */}
             <button
-              onClick={() => setShowChinese(!showChinese)}
+              onClick={toggleLanguage}
               className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border whitespace-nowrap ${
-                showChinese 
+                targetLang === 'zh'
                   ? 'bg-red-50 text-danish-red border-danish-red/30 ring-1 ring-danish-red/30' 
                   : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
               }`}
             >
-              <span className="hidden sm:inline">🇨🇳</span>
-              <span className="hidden lg:inline">{showChinese ? '中文 On' : '中文 Off'}</span>
-              <span className="lg:hidden">{showChinese ? '中' : '英'}</span>
+              <Languages size={14} />
+              <span className="hidden lg:inline">{targetLang === 'en' ? 'English' : 'Chinese'}</span>
+              <span className="lg:hidden">{targetLang === 'en' ? 'EN' : '中'}</span>
             </button>
 
              {/* Fullscreen Toggle */}
@@ -340,6 +344,7 @@ function App() {
             showDetailed={showDetailed}
             onSetBookmark={handleSetBookmark}
             textSize={textSize}
+            targetLang={targetLang}
           />
         </main>
       </div>

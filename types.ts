@@ -8,7 +8,7 @@ export interface Article {
 
 export interface WordDefinition {
   word: string;
-  translation: string;
+  translation?: string;
   chineseTranslation?: string;
   pronunciation: string;
   partOfSpeech: string;

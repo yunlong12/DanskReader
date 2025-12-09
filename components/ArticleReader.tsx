@@ -13,6 +13,7 @@ interface ArticleReaderProps {
   showDetailed: boolean;
   onSetBookmark: (index: number) => void;
   textSize: number;
+  targetLang: 'en' | 'zh';
 }
 
 const ArticleReader: React.FC<ArticleReaderProps> = ({ 
@@ -25,7 +26,8 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
   isTranslating,
   showDetailed,
   onSetBookmark,
-  textSize
+  textSize,
+  targetLang
 }) => {
   const [selectionRect, setSelectionRect] = useState<DOMRect | null>(null);
   // Track window width to ensure popover calculations are accurate on resize/rotation
@@ -262,6 +264,15 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
         marginLeft: `${clampedArrowOffset}px`
     };
 
+    // Determine which translation to show based on targetLang
+    const displayTranslation = targetLang === 'zh' 
+      ? currentDefinition?.chineseTranslation 
+      : currentDefinition?.translation;
+      
+    const displayDetailed = targetLang === 'zh'
+      ? currentDefinition?.detailedChineseExplanation
+      : currentDefinition?.detailedExplanation;
+
     return (
         <div 
           style={popoverStyle}
@@ -290,40 +301,19 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
 
                 <div className="space-y-2">
                   <div className="flex items-start gap-2">
-                    {currentDefinition.chineseTranslation && (
-                       <span className="text-xs font-bold text-gray-400 mt-1 w-6 flex-shrink-0">EN</span>
-                    )}
-                    <p className="text-base font-medium text-gray-900 leading-snug">{currentDefinition.translation}</p>
+                    <p className="text-base font-medium text-gray-900 leading-snug">
+                      {displayTranslation || "No translation available"}
+                    </p>
                   </div>
-                  
-                  {currentDefinition.chineseTranslation && (
-                    <div className="flex items-start gap-2 pt-2 border-t border-gray-50">
-                      <span className="text-xs font-bold text-gray-400 mt-1 w-6 flex-shrink-0">CN</span>
-                      <p className="text-base font-medium text-gray-700 leading-snug">
-                        {currentDefinition.chineseTranslation}
-                      </p>
-                    </div>
-                  )}
 
-                  {showDetailed && (currentDefinition.detailedExplanation || currentDefinition.detailedChineseExplanation) && (
+                  {showDetailed && displayDetailed && (
                     <div className="pt-3 mt-2 border-t border-gray-100 animate-in fade-in duration-300">
                       <p className="text-xs font-bold text-purple-500 uppercase tracking-wider mb-1">Detailed Explanation</p>
-                      {currentDefinition.detailedExplanation && (
-                        <div className="mb-2">
-                           {currentDefinition.detailedChineseExplanation && <span className="text-xs font-bold text-gray-400 block mb-0.5">EN</span>}
-                           <p className="text-sm text-gray-600 leading-relaxed bg-purple-50 p-2 rounded-md border border-purple-100">
-                             {currentDefinition.detailedExplanation}
-                           </p>
-                        </div>
-                      )}
-                      {currentDefinition.detailedChineseExplanation && (
-                        <div>
-                           <span className="text-xs font-bold text-gray-400 block mb-0.5">CN</span>
-                           <p className="text-sm text-gray-600 leading-relaxed bg-purple-50 p-2 rounded-md border border-purple-100">
-                             {currentDefinition.detailedChineseExplanation}
-                           </p>
-                        </div>
-                      )}
+                      <div className="mb-2">
+                         <p className="text-sm text-gray-600 leading-relaxed bg-purple-50 p-2 rounded-md border border-purple-100">
+                           {displayDetailed}
+                         </p>
+                      </div>
                     </div>
                   )}
                 </div>

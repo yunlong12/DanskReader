@@ -85,7 +85,7 @@ const fetchGoogleTranslation = async (text: string, targetLang: string): Promise
 export const translateWordInContext = async (
   textToTranslate: string, 
   contextSentence: string, 
-  includeChinese: boolean = false,
+  targetLang: 'en' | 'zh' = 'en',
   requestDetailed: boolean = false
 ): Promise<WordDefinition> => {
   
@@ -94,26 +94,24 @@ export const translateWordInContext = async (
   // If that fails (e.g. network/CORS), or if detailed explanation IS requested, use Gemini.
   if (!requestDetailed) {
     try {
-      const promises = [fetchGoogleTranslation(textToTranslate, 'en')];
-      if (includeChinese) {
-        promises.push(fetchGoogleTranslation(textToTranslate, 'zh-CN'));
+      const googleLangCode = targetLang === 'zh' ? 'zh-CN' : 'en';
+      const translationResult = await fetchGoogleTranslation(textToTranslate, googleLangCode);
+      
+      const result: WordDefinition = {
+        word: textToTranslate,
+        contextParams: contextSentence,
+        pronunciation: "", // GT simple endpoint doesn't return IPA easily
+        partOfSpeech: "Text", // Generic fallback
+        // No detailed explanations
+      };
+
+      if (targetLang === 'zh') {
+        result.chineseTranslation = translationResult;
+      } else {
+        result.translation = translationResult;
       }
 
-      const results = await Promise.all(promises);
-      const enTranslation = results[0];
-      const cnTranslation = includeChinese ? results[1] : undefined;
-
-      if (enTranslation) {
-        return {
-          word: textToTranslate,
-          contextParams: contextSentence,
-          translation: enTranslation,
-          chineseTranslation: cnTranslation,
-          pronunciation: "", // GT simple endpoint doesn't return IPA easily
-          partOfSpeech: "Text", // Generic fallback
-          // No detailed explanations
-        };
-      }
+      return result;
     } catch (error) {
       console.warn("Google Translate failed, falling back to Gemini", error);
       // Fallback to Gemini below
@@ -127,9 +125,11 @@ export const translateWordInContext = async (
         ? `Translate the Danish text "${textToTranslate}"`
         : `Translate the Danish word "${textToTranslate}"`;
 
-    let instructions = `${basePrompt}. Provide the English translation.`;
-    if (includeChinese) {
-        instructions += ` Also provide the Simplified Chinese translation.`;
+    let instructions = basePrompt;
+    if (targetLang === 'zh') {
+        instructions += ` Provide the Simplified Chinese translation.`;
+    } else {
+        instructions += ` Provide the English translation.`;
     }
     
     // Explicitly instruct to act like Google Translate for the main fields, but allow detail in the explanation field
@@ -139,21 +139,24 @@ export const translateWordInContext = async (
     
     const prompt = `${instructions} ${contextInstruction}`;
 
-    // Dynamically build schema based on whether Chinese is requested
+    // Dynamically build schema based on requested language
     const schemaProperties: any = {
-      translation: { type: Type.STRING, description: "The definition/translation in English. MUST be in English. Direct translation only." },
       pronunciation: { type: Type.STRING, description: "IPA pronunciation or phonetic transcription." },
       partOfSpeech: { type: Type.STRING, description: "Grammatical type (noun, verb, etc) or 'Sentence'/'Phrase'." },
-      detailedExplanation: { type: Type.STRING, description: "A detailed explanation of the meaning, nuances, synonyms, and grammatical usage notes in English." }
     };
 
-    const requiredFields = ["translation", "pronunciation", "partOfSpeech", "detailedExplanation"];
+    const requiredFields = ["pronunciation", "partOfSpeech"];
 
-    if (includeChinese) {
-      schemaProperties.chineseTranslation = { type: Type.STRING, description: "The definition/translation in Simplified Chinese. MUST be in Chinese. Direct translation only." };
-      schemaProperties.detailedChineseExplanation = { type: Type.STRING, description: "A detailed explanation of the meaning, nuances, synonyms, and grammatical usage notes in Simplified Chinese." };
-      requiredFields.push("chineseTranslation");
-      requiredFields.push("detailedChineseExplanation");
+    if (targetLang === 'zh') {
+       schemaProperties.chineseTranslation = { type: Type.STRING, description: "The definition/translation in Simplified Chinese. MUST be in Chinese. Direct translation only." };
+       schemaProperties.detailedChineseExplanation = { type: Type.STRING, description: "A detailed explanation of the meaning, nuances, synonyms, and grammatical usage notes in Simplified Chinese." };
+       requiredFields.push("chineseTranslation");
+       requiredFields.push("detailedChineseExplanation");
+    } else {
+       schemaProperties.translation = { type: Type.STRING, description: "The definition/translation in English. MUST be in English. Direct translation only." };
+       schemaProperties.detailedExplanation = { type: Type.STRING, description: "A detailed explanation of the meaning, nuances, synonyms, and grammatical usage notes in English." };
+       requiredFields.push("translation");
+       requiredFields.push("detailedExplanation");
     }
 
     const translationSchema: Schema = {
