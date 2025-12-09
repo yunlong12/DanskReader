@@ -4,7 +4,7 @@ import { BookOpen, RefreshCw, Loader2, Bookmark } from 'lucide-react';
 
 interface ArticleReaderProps {
   article: Article | null;
-  onWordSelect: (word: string, context: string) => void;
+  onWordSelect: (word: string, context: string, isSentence: boolean) => void;
   onClearSelection: () => void;
   isLoading: boolean;
   onGenerateNew: () => void;
@@ -109,7 +109,8 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
       if (context) {
          // Dismiss the native context menu (Android/iOS) by clearing the selection visual
          // We do this AFTER capturing the rect and text
-         onWordSelect(selectedText, context);
+         // Pass true for isSentence because this was a selection action
+         onWordSelect(selectedText, context, true);
          selection.removeAllRanges();
       }
     }, 10);
@@ -198,7 +199,8 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
     const rect = measureRange.getBoundingClientRect();
     
     setSelectionRect(rect);
-    onWordSelect(clickedWord, context);
+    // Pass false for isSentence because this was a single click
+    onWordSelect(clickedWord, context, false);
 
   }, [onWordSelect, onClearSelection]);
 

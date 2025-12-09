@@ -161,7 +161,7 @@ function App() {
     setCurrentDefinition(null);
   };
 
-  const handleWordSelect = async (word: string, context: string) => {
+  const handleWordSelect = async (word: string, context: string, isSentence: boolean = false) => {
     // IMMEDIATE STOP: Stop any existing audio (and pending auto-play loops) 
     // the moment the user interacts with a new word.
     stopAudio();
@@ -192,8 +192,8 @@ function App() {
         return [newItem, ...filtered].slice(50); // Keep last 50
       });
 
-      // Handle Auto-Play logic
-      if (autoPlayCount > 0) {
+      // Handle Auto-Play logic: Only play if it's NOT a sentence selection
+      if (!isSentence && autoPlayCount > 0) {
         (async () => {
           const speed = playbackSpeed;
           // Loop based on autoPlayCount
