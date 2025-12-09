@@ -3,12 +3,12 @@ import { generateArticle, translateWordInContext, playPronunciation, stopAudio }
 import { Article, WordDefinition, HistoryItem, LoadingState } from './types';
 import ArticleReader from './components/ArticleReader';
 import ArticleGeneratorModal from './components/ArticleGeneratorModal';
-import { Sparkles, Volume2, Turtle, FileText, Maximize, Minimize, Plus, Minus, Type, Languages, Palette } from 'lucide-react';
+import { Sparkles, Volume2, Turtle, FileText, Maximize, Minimize, Plus, Minus, Type, Languages, Palette, VolumeX } from 'lucide-react';
 
 const DEFAULT_SETTINGS = {
   targetLang: 'en' as 'en' | 'zh',
   showDetailed: false,
-  autoPlayAudio: true,
+  autoPlayCount: 3,
   playbackSpeed: 1.0,
   textSize: 1.0,
   readingTheme: 'light' as 'light' | 'sepia' | 'dark'
@@ -20,7 +20,16 @@ function App() {
     if (typeof window === 'undefined') return DEFAULT_SETTINGS;
     try {
       const saved = localStorage.getItem('dansk_reader_settings');
-      return saved ? { ...DEFAULT_SETTINGS, ...JSON.parse(saved) } : DEFAULT_SETTINGS;
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // Migration: handle legacy boolean autoPlayAudio if it exists
+        if (parsed.autoPlayAudio !== undefined) {
+          parsed.autoPlayCount = parsed.autoPlayAudio ? 3 : 0;
+          delete parsed.autoPlayAudio;
+        }
+        return { ...DEFAULT_SETTINGS, ...parsed };
+      }
+      return DEFAULT_SETTINGS;
     } catch (e) {
       console.error("Failed to load settings", e);
       return DEFAULT_SETTINGS;
@@ -39,7 +48,7 @@ function App() {
   // User Preferences (Initialized from LocalStorage)
   const [targetLang, setTargetLang] = useState<'en' | 'zh'>(initialSettings.targetLang);
   const [showDetailed, setShowDetailed] = useState(initialSettings.showDetailed);
-  const [autoPlayAudio, setAutoPlayAudio] = useState(initialSettings.autoPlayAudio);
+  const [autoPlayCount, setAutoPlayCount] = useState<number>(initialSettings.autoPlayCount ?? 3);
   const [playbackSpeed, setPlaybackSpeed] = useState(initialSettings.playbackSpeed);
   const [textSize, setTextSize] = useState(initialSettings.textSize);
   const [readingTheme, setReadingTheme] = useState<'light' | 'sepia' | 'dark'>(initialSettings.readingTheme);
@@ -68,13 +77,13 @@ function App() {
     const settingsToSave = {
       targetLang,
       showDetailed,
-      autoPlayAudio,
+      autoPlayCount,
       playbackSpeed,
       textSize,
       readingTheme
     };
     localStorage.setItem('dansk_reader_settings', JSON.stringify(settingsToSave));
-  }, [targetLang, showDetailed, autoPlayAudio, playbackSpeed, textSize, readingTheme]);
+  }, [targetLang, showDetailed, autoPlayCount, playbackSpeed, textSize, readingTheme]);
 
   // Handle fullscreen change events (e.g. user presses Esc or back button)
   useEffect(() => {
@@ -184,18 +193,18 @@ function App() {
       });
 
       // Handle Auto-Play logic
-      if (autoPlayAudio) {
+      if (autoPlayCount > 0) {
         (async () => {
           const speed = playbackSpeed;
-          // Play 3 times
-          for (let i = 0; i < 3; i++) {
+          // Loop based on autoPlayCount
+          for (let i = 0; i < autoPlayCount; i++) {
             // Check if the user has clicked something else (or double-clicked) in the meantime
             if (currentRequestIdRef.current !== requestId) break;
             
             try {
               await playPronunciation(definition.word, speed);
               // Small delay between repetitions
-              if (i < 2) await new Promise(resolve => setTimeout(resolve, 500));
+              if (i < autoPlayCount - 1) await new Promise(resolve => setTimeout(resolve, 500));
             } catch (e) {
               console.warn("Auto-play interrupted or failed", e);
               break;
@@ -221,6 +230,15 @@ function App() {
       if (prev === 1.0) return 0.7;
       if (prev === 0.7) return 0.5;
       return 1.0;
+    });
+  };
+
+  const cycleAutoPlay = () => {
+    setAutoPlayCount(prev => {
+      if (prev === 0) return 1;
+      if (prev === 1) return 2;
+      if (prev === 2) return 3;
+      return 0; // Cycle back to off
     });
   };
 
@@ -274,6 +292,11 @@ function App() {
     return 'Dark';
   };
 
+  const getAutoPlayLabel = () => {
+    if (autoPlayCount === 0) return 'Auto Off';
+    return `Auto ${autoPlayCount}x`;
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col font-sans">
       {/* Header */}
@@ -315,17 +338,17 @@ function App() {
               <span>{getThemeLabel()}</span>
             </button>
 
-            {/* Auto Play Toggle */}
+            {/* Auto Play Toggle (0, 1x, 2x, 3x) */}
             <button
-              onClick={() => setAutoPlayAudio(!autoPlayAudio)}
+              onClick={cycleAutoPlay}
               className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border whitespace-nowrap flex-shrink-0 ${
-                autoPlayAudio 
+                autoPlayCount > 0
                   ? 'bg-blue-50 text-blue-600 border-blue-200 ring-1 ring-blue-200' 
                   : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
               }`}
             >
-              <Volume2 size={14} />
-              <span>{autoPlayAudio ? 'Auto Play (3x)' : 'Auto Play Off'}</span>
+              {autoPlayCount > 0 ? <Volume2 size={14} /> : <VolumeX size={14} />}
+              <span>{getAutoPlayLabel()}</span>
             </button>
 
             {/* Speed Toggle */}
