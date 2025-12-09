@@ -5,18 +5,42 @@ import ArticleReader from './components/ArticleReader';
 import ArticleGeneratorModal from './components/ArticleGeneratorModal';
 import { Sparkles, Volume2, Turtle, FileText, Maximize, Minimize, Plus, Minus, Type, Languages } from 'lucide-react';
 
+const DEFAULT_SETTINGS = {
+  targetLang: 'en' as 'en' | 'zh',
+  showDetailed: false,
+  autoPlayAudio: true,
+  playbackSpeed: 1.0,
+  textSize: 1.0
+};
+
 function App() {
+  // --- Settings Persistence Logic ---
+  const getInitialSettings = () => {
+    if (typeof window === 'undefined') return DEFAULT_SETTINGS;
+    try {
+      const saved = localStorage.getItem('dansk_reader_settings');
+      return saved ? { ...DEFAULT_SETTINGS, ...JSON.parse(saved) } : DEFAULT_SETTINGS;
+    } catch (e) {
+      console.error("Failed to load settings", e);
+      return DEFAULT_SETTINGS;
+    }
+  };
+
+  const [initialSettings] = useState(getInitialSettings);
+
   const [article, setArticle] = useState<Article | null>(null);
   const [currentDefinition, setCurrentDefinition] = useState<WordDefinition | null>(null);
-  const [history, setHistory] = useState<HistoryItem[]>([]); // Kept for logic if needed, but UI removed
+  const [history, setHistory] = useState<HistoryItem[]>([]); 
   const [loadingState, setLoadingState] = useState<LoadingState>(LoadingState.IDLE);
   const [isGeneratorOpen, setIsGeneratorOpen] = useState(false);
-  const [targetLang, setTargetLang] = useState<'en' | 'zh'>('en'); // Changed from showChinese boolean
-  const [showDetailed, setShowDetailed] = useState(false);
-  const [autoPlayAudio, setAutoPlayAudio] = useState(true); // Default to true as requested
-  const [playbackSpeed, setPlaybackSpeed] = useState(1.0);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [textSize, setTextSize] = useState(1.0);
+  
+  // User Preferences (Initialized from LocalStorage)
+  const [targetLang, setTargetLang] = useState<'en' | 'zh'>(initialSettings.targetLang);
+  const [showDetailed, setShowDetailed] = useState(initialSettings.showDetailed);
+  const [autoPlayAudio, setAutoPlayAudio] = useState(initialSettings.autoPlayAudio);
+  const [playbackSpeed, setPlaybackSpeed] = useState(initialSettings.playbackSpeed);
+  const [textSize, setTextSize] = useState(initialSettings.textSize);
   
   // Ref to track the current request ID to prevent overlapping loops/race conditions
   const currentRequestIdRef = useRef<number>(0);
@@ -37,6 +61,18 @@ function App() {
     localStorage.setItem('dansk_reader_article_history', JSON.stringify(articleHistory));
   }, [articleHistory]);
 
+  // Save User Settings whenever they change
+  useEffect(() => {
+    const settingsToSave = {
+      targetLang,
+      showDetailed,
+      autoPlayAudio,
+      playbackSpeed,
+      textSize
+    };
+    localStorage.setItem('dansk_reader_settings', JSON.stringify(settingsToSave));
+  }, [targetLang, showDetailed, autoPlayAudio, playbackSpeed, textSize]);
+
   // Handle fullscreen change events (e.g. user presses Esc or back button)
   useEffect(() => {
     const handleFullscreenChange = () => {
@@ -48,8 +84,6 @@ function App() {
 
   // Initial load
   useEffect(() => {
-    // We could auto-load an article here, but let's let the user choose or click start.
-    // For better UX, let's open the generator immediately if no article.
     if (!article) {
        setIsGeneratorOpen(true);
     }
