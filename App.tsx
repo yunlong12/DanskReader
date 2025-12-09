@@ -3,7 +3,7 @@ import { generateArticle, translateWordInContext, playPronunciation, stopAudio }
 import { Article, WordDefinition, HistoryItem, LoadingState } from './types';
 import ArticleReader from './components/ArticleReader';
 import ArticleGeneratorModal from './components/ArticleGeneratorModal';
-import { Sparkles, Volume2, Turtle, FileText, Maximize, Minimize, Plus, Minus, Type, Languages, Palette, VolumeX, Bookmark } from 'lucide-react';
+import { Sparkles, Volume2, Turtle, FileText, Maximize, Minimize, Plus, Minus, Type, Languages, Palette, VolumeX, Bookmark, MessageSquareQuote } from 'lucide-react';
 
 const DEFAULT_SETTINGS = {
   targetLang: 'en' as 'en' | 'zh',
@@ -228,6 +228,24 @@ function App() {
     }
   };
 
+  const handleManualTranslate = () => {
+    const selection = window.getSelection();
+    if (!selection || selection.isCollapsed) {
+       alert("Please select some text first.");
+       return;
+    }
+    const text = selection.toString().trim();
+    if (text) {
+       // Attempt to get context from parent element
+       let context = text;
+       if (selection.anchorNode && selection.anchorNode.parentElement) {
+          context = selection.anchorNode.parentElement.innerText;
+       }
+       // Treat as sentence to avoid audio auto-play
+       handleWordSelect(text, context, true);
+    }
+  };
+
   const cyclePlaybackSpeed = () => {
     setPlaybackSpeed(prev => {
       if (prev === 1.0) return 0.7;
@@ -314,6 +332,17 @@ function App() {
           </div>
           
           <div className="flex items-center gap-2 flex-shrink-0">
+            {/* Manual Translate Button */}
+             <button
+              onMouseDown={(e) => e.preventDefault()} // Prevent focus loss on click to keep selection active
+              onClick={handleManualTranslate}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 transition-all whitespace-nowrap flex-shrink-0"
+              title="Translate Selected Text"
+            >
+              <MessageSquareQuote size={14} />
+              <span>Translate Selection</span>
+            </button>
+
             {/* Text Size Control */}
             <div className="flex items-center border border-gray-200 rounded-full bg-white mr-1 flex-shrink-0">
               <button onClick={handleDecreaseTextSize} className="px-2 py-1.5 hover:bg-gray-50 text-gray-500 rounded-l-full">

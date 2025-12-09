@@ -79,8 +79,7 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
   };
 
   const handleMouseUp = useCallback(() => {
-    // Only handle DRAG selections here (sentences/phrases)
-    // Single clicks are handled by handleClick
+    // Handle DRAG selections (sentences/phrases)
     setTimeout(() => {
       const selection = window.getSelection();
       
@@ -94,48 +93,22 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
         return;
       }
 
-      // Mark that a selection action took place to prevent conflict with click
-      isSelectingRef.current = true;
-      // Reset after click event would have fired (approx 300ms for mobile taps)
-      setTimeout(() => { isSelectingRef.current = false; }, 500);
-
-      // If it's just a single word selected via double-click drag, we can ignore it 
-      // or handle it. But usually drag is for phrases.
-      // Let's allow it, but we mostly care about phrases here.
-
-      // Calculate position
+      // CRITICAL: Calculate and store the rect of the selected text.
+      // This ensures that when the user clicks "Translate Selection" in the header,
+      // the popover knows where to appear.
       const range = selection.getRangeAt(0);
       const rect = range.getBoundingClientRect();
       setSelectionRect(rect);
 
-      // Get context
-      let context = "";
-      if (selection.anchorNode) {
-         let el: HTMLElement | null = selection.anchorNode.parentElement;
-         const validContextTags = ['P', 'DIV', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'LI', 'BLOCKQUOTE'];
-         
-         while (el && !validContextTags.includes(el.tagName)) {
-           el = el.parentElement;
-         }
-         
-         if (el) {
-           context = el.innerText;
-         } else if (selection.anchorNode.parentElement) {
-           context = selection.anchorNode.parentElement.innerText;
-         } else {
-           context = selection.anchorNode.textContent || "";
-         }
-      }
+      // Mark that a selection action took place to prevent conflict with click
+      isSelectingRef.current = true;
+      setTimeout(() => { isSelectingRef.current = false; }, 500);
 
-      if (context) {
-         // Dismiss the native context menu (Android/iOS) by clearing the selection visual
-         // We do this AFTER capturing the rect and text
-         // Pass true for isSentence because this was a selection action
-         onWordSelect(selectedText, context, true);
-         selection.removeAllRanges();
-      }
+      // We do NOT trigger automatic translation here.
+      // The user must click the "Translate Selection" button.
+      
     }, 10);
-  }, [onWordSelect]);
+  }, []);
 
   const handleClick = useCallback((e: React.MouseEvent) => {
     // Check if we just processed a selection drag, if so, ignore this click
@@ -450,6 +423,7 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
         onMouseUp={handleMouseUp}
         onTouchEnd={handleMouseUp}
         onDoubleClick={(e) => e.preventDefault()}
+        onContextMenu={(e) => e.preventDefault()}
       >
         {/* Article Header */}
         <div className={`p-8 pb-4 border-b ${themeStyles.header}`}>
