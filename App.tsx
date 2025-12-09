@@ -3,7 +3,7 @@ import { generateArticle, translateWordInContext, playPronunciation } from './se
 import { Article, WordDefinition, HistoryItem, LoadingState } from './types';
 import ArticleReader from './components/ArticleReader';
 import ArticleGeneratorModal from './components/ArticleGeneratorModal';
-import { Sparkles, Volume2, Turtle, FileText, Maximize, Minimize } from 'lucide-react';
+import { Sparkles, Volume2, Turtle, FileText, Maximize, Minimize, Plus, Minus, Type } from 'lucide-react';
 
 function App() {
   const [article, setArticle] = useState<Article | null>(null);
@@ -16,9 +16,10 @@ function App() {
   const [autoPlayAudio, setAutoPlayAudio] = useState(true); // Default to true as requested
   const [playbackSpeed, setPlaybackSpeed] = useState(1.0);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [textSize, setTextSize] = useState(1.0);
   
-  // Ref to track the current word being played to prevent overlapping loops
-  const currentPlayingWordRef = useRef<string | null>(null);
+  // Ref to track the current request ID to prevent overlapping loops/race conditions
+  const currentRequestIdRef = useRef<number>(0);
   
   // Article History State
   const [articleHistory, setArticleHistory] = useState<Article[]>(() => {
@@ -115,14 +116,22 @@ function App() {
   };
 
   const handleWordSelect = async (word: string, context: string) => {
+    // Generate a unique ID for this specific request interaction.
+    // This allows us to cancel previous requests (like the first click of a double-click)
+    // to prevent race conditions and overlapping audio loops.
+    currentRequestIdRef.current += 1;
+    const requestId = currentRequestIdRef.current;
+    
     setLoadingState(LoadingState.TRANSLATING);
     setCurrentDefinition(null); // Clear previous while loading
     
-    // Update ref to indicate any previous playback loop should ideally stop or be ignored
-    currentPlayingWordRef.current = word;
-
     try {
       const definition = await translateWordInContext(word, context, showChinese);
+      
+      // Check if a new request has started since we began. 
+      // If so, abort this one to prevent stale UI updates.
+      if (currentRequestIdRef.current !== requestId) return;
+
       setCurrentDefinition(definition);
       
       setHistory(prev => {
@@ -138,8 +147,8 @@ function App() {
           const speed = playbackSpeed;
           // Play 3 times
           for (let i = 0; i < 3; i++) {
-            // Check if the user has selected a different word in the meantime
-            if (currentPlayingWordRef.current !== word) break;
+            // Check if the user has clicked something else (or double-clicked) in the meantime
+            if (currentRequestIdRef.current !== requestId) break;
             
             try {
               await playPronunciation(definition.word, speed);
@@ -154,9 +163,14 @@ function App() {
       }
 
     } catch (error) {
+      // If error occurred but we moved on to another request, ignore the error
+      if (currentRequestIdRef.current !== requestId) return;
       console.error("Translation failed", error);
     } finally {
-      setLoadingState(LoadingState.IDLE);
+      // Only clear loading state if we are still the active request
+      if (currentRequestIdRef.current === requestId) {
+        setLoadingState(LoadingState.IDLE);
+      }
     }
   };
 
@@ -165,6 +179,20 @@ function App() {
       if (prev === 1.0) return 0.7;
       if (prev === 0.7) return 0.5;
       return 1.0;
+    });
+  };
+
+  const handleIncreaseTextSize = () => {
+    setTextSize(prev => {
+      const next = prev + 0.1;
+      return next > 3.0 ? 3.0 : parseFloat(next.toFixed(1));
+    });
+  };
+
+  const handleDecreaseTextSize = () => {
+    setTextSize(prev => {
+      const next = prev - 0.1;
+      return next < 0.5 ? 0.5 : parseFloat(next.toFixed(1));
     });
   };
 
@@ -200,6 +228,27 @@ function App() {
           </div>
           
           <div className="flex items-center gap-2">
+            {/* Text Size Control */}
+            <div className="flex items-center border border-gray-200 rounded-full bg-white mr-1 hidden sm:flex">
+              <button onClick={handleDecreaseTextSize} className="px-2 py-1.5 hover:bg-gray-50 text-gray-500 rounded-l-full">
+                <Minus size={14} />
+              </button>
+              <div className="px-1 text-xs font-medium text-gray-400 flex items-center gap-0.5 border-x border-gray-100 h-4 leading-4">
+                <Type size={12} />
+              </div>
+              <button onClick={handleIncreaseTextSize} className="px-2 py-1.5 hover:bg-gray-50 text-gray-500 rounded-r-full">
+                <Plus size={14} />
+              </button>
+            </div>
+             {/* Mobile Text Size Control (simplified) */}
+             <button 
+              onClick={handleIncreaseTextSize} 
+              className="sm:hidden p-2 rounded-full text-gray-500 border border-gray-200"
+              title="Increase text size"
+            >
+               <Type size={16} />
+            </button>
+
             {/* Auto Play Toggle */}
             <button
               onClick={() => setAutoPlayAudio(!autoPlayAudio)}
@@ -289,6 +338,7 @@ function App() {
             isTranslating={loadingState === LoadingState.TRANSLATING}
             showDetailed={showDetailed}
             onSetBookmark={handleSetBookmark}
+            textSize={textSize}
           />
         </main>
       </div>

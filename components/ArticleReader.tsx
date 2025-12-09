@@ -12,6 +12,7 @@ interface ArticleReaderProps {
   isTranslating: boolean;
   showDetailed: boolean;
   onSetBookmark: (index: number) => void;
+  textSize: number;
 }
 
 const ArticleReader: React.FC<ArticleReaderProps> = ({ 
@@ -23,7 +24,8 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
   currentDefinition,
   isTranslating,
   showDetailed,
-  onSetBookmark
+  onSetBookmark,
+  textSize
 }) => {
   const [selectionRect, setSelectionRect] = useState<DOMRect | null>(null);
   // Track window width to ensure popover calculations are accurate on resize/rotation
@@ -51,33 +53,39 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
     }
   }, [article?.id, article?.bookmarkParagraphIndex]);
 
+  // Helper to check if a character is part of a Danish word
+  const isWordChar = (char: string) => {
+    return /[a-zA-ZæøåÆØÅ0-9\-]/.test(char);
+  };
+
   const handleMouseUp = useCallback(() => {
-    // Use a small timeout to ensure the selection is fully finalized by the browser
+    // Only handle DRAG selections here (sentences/phrases)
+    // Single clicks are handled by handleClick
     setTimeout(() => {
       const selection = window.getSelection();
       
+      // If selection is collapsed (empty), it's a click, not a drag. Ignore it here.
       if (!selection || selection.isCollapsed || selection.rangeCount === 0) {
-        setSelectionRect(null);
-        onClearSelection();
         return;
       }
 
       const selectedText = selection.toString().trim();
       if (!selectedText) {
-        setSelectionRect(null);
-        onClearSelection();
         return;
       }
+
+      // If it's just a single word selected via double-click drag, we can ignore it 
+      // or handle it. But usually drag is for phrases.
+      // Let's allow it, but we mostly care about phrases here.
 
       // Calculate position
       const range = selection.getRangeAt(0);
       const rect = range.getBoundingClientRect();
       setSelectionRect(rect);
 
-      // Get context: try to get the full paragraph/container text
+      // Get context
       let context = "";
       if (selection.anchorNode) {
-         // Traverse up to find the block element
          let el: HTMLElement | null = selection.anchorNode.parentElement;
          const validContextTags = ['P', 'DIV', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'LI', 'BLOCKQUOTE'];
          
@@ -88,7 +96,6 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
          if (el) {
            context = el.innerText;
          } else if (selection.anchorNode.parentElement) {
-           // Fallback to parent element text if no specific block tag found
            context = selection.anchorNode.parentElement.innerText;
          } else {
            context = selection.anchorNode.textContent || "";
@@ -96,24 +103,99 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
       }
 
       if (context) {
-        // Determine if it is a single word or a phrase/sentence selection
-        // We use a simple heuristic: if it contains spaces, it's likely a phrase
-        if (selectedText.includes(' ')) {
-           // Treat as phrase/sentence: preserve punctuation
-           onWordSelect(selectedText, context);
-        } else {
-           // Treat as single word: clean punctuation
-           // This regex matches a word potentially containing Danish chars
-           const cleanWordMatch = selectedText.match(/[a-zA-ZæøåÆØÅ]+/);
-           const cleanWord = cleanWordMatch ? cleanWordMatch[0] : selectedText;
-           onWordSelect(cleanWord, context);
-        }
-
-        // Dismiss the native context menu (Android/iOS) by clearing the selection visual
-        // The selectionRect state has already been captured above, so the popover will still appear correctly
-        selection.removeAllRanges();
+         // Dismiss the native context menu (Android/iOS) by clearing the selection visual
+         // We do this AFTER capturing the rect and text
+         onWordSelect(selectedText, context);
+         selection.removeAllRanges();
       }
     }, 10);
+  }, [onWordSelect]);
+
+  const handleClick = useCallback((e: React.MouseEvent) => {
+    // If user has actively selected text (dragged), don't trigger single word lookup
+    const selection = window.getSelection();
+    if (selection && !selection.isCollapsed && selection.toString().trim().length > 0) {
+      return;
+    }
+
+    // Stop native behavior (like "Touch to Search" or cursor placement) for single clicks
+    e.preventDefault();
+
+    // Use Caret Range to find word at coordinates (Coordinate-based lookup)
+    // This bypasses the need for "selection" and thus avoids native menus
+    const x = e.clientX;
+    const y = e.clientY;
+
+    let textNode: Node | null = null;
+    let offset = 0;
+
+    // Standard API
+    if (typeof document.caretRangeFromPoint === 'function') {
+      const range = document.caretRangeFromPoint(x, y);
+      if (range) {
+        textNode = range.startContainer;
+        offset = range.startOffset;
+      }
+    } 
+    // Fallback/Alternative API (Webkit/Firefox)
+    else if ((document as any).caretPositionFromPoint) {
+      const pos = (document as any).caretPositionFromPoint(x, y);
+      if (pos) {
+        textNode = pos.offsetNode;
+        offset = pos.offset;
+      }
+    }
+
+    // Ensure we hit a text node
+    if (!textNode || textNode.nodeType !== Node.TEXT_NODE) {
+      // Clicked outside text (e.g. whitespace between paragraphs)
+      setSelectionRect(null);
+      onClearSelection();
+      return;
+    }
+
+    const text = textNode.textContent || "";
+    
+    // Expand from offset to find the full word
+    // Look backwards
+    let start = offset;
+    while (start > 0 && isWordChar(text[start - 1])) {
+        start--;
+    }
+    
+    // Look forwards
+    let end = offset;
+    while (end < text.length && isWordChar(text[end])) {
+        end++;
+    }
+
+    const clickedWord = text.substring(start, end).trim();
+
+    // Filter out clicks on whitespace or purely punctuation
+    if (!clickedWord || !/[a-zA-ZæøåÆØÅ0-9]/.test(clickedWord)) {
+      setSelectionRect(null);
+      onClearSelection();
+      return;
+    }
+
+    // Get context (block element text)
+    let context = "";
+    let el = textNode.parentElement;
+    const validContextTags = ['P', 'DIV', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'LI', 'BLOCKQUOTE'];
+    while (el && !validContextTags.includes(el.tagName)) {
+      el = el.parentElement;
+    }
+    context = el ? el.innerText : (textNode.parentElement?.innerText || text);
+
+    // Create a temporary range to measure the word's position for the popover
+    const measureRange = document.createRange();
+    measureRange.setStart(textNode, start);
+    measureRange.setEnd(textNode, end);
+    const rect = measureRange.getBoundingClientRect();
+    
+    setSelectionRect(rect);
+    onWordSelect(clickedWord, context);
+
   }, [onWordSelect, onClearSelection]);
 
   if (!article) {
@@ -144,7 +226,7 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
     const spaceAbove = selectionRect.top;
     const placeBelow = spaceAbove < 250;
     
-    // Constants for width calculation (w-72 = 288px, w-80 = 320px)
+    // Constants for width calculation
     const isMobile = windowWidth < 768;
     const popoverWidth = isMobile ? 288 : 320; 
     const margin = 12; // Safety margin from screen edge
@@ -153,41 +235,25 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
     const textCenter = selectionRect.left + (selectionRect.width / 2);
     
     // Clamp the center position of the popover so it stays within screen bounds
-    // Min center X = half width + margin
-    // Max center X = screen width - half width - margin
     const minCenterX = (popoverWidth / 2) + margin;
     const maxCenterX = windowWidth - (popoverWidth / 2) - margin;
     
-    // The actual X position for the center of the popover
     const popoverCenterX = Math.max(minCenterX, Math.min(textCenter, maxCenterX));
     
-    // Calculate how much we shifted from the ideal text center
-    // If popoverCenterX < textCenter, we shifted left, so arrow needs to shift right (positive)
-    // Arrow offset should be applied to the arrow element relative to the popover center
     const arrowOffset = textCenter - popoverCenterX;
     
-    // Clamp arrow offset so it doesn't detach from the box (keep within rounded corners)
-    const maxArrowOffset = (popoverWidth / 2) - 24; // 24px buffer for corners
+    const maxArrowOffset = (popoverWidth / 2) - 24; 
     const clampedArrowOffset = Math.max(-maxArrowOffset, Math.min(arrowOffset, maxArrowOffset));
 
     const popoverStyle: React.CSSProperties = {
       position: 'fixed',
       zIndex: 50,
       left: `${popoverCenterX}px`,
-      // If placing below, we position at the bottom of the text rect
-      // If placing above, we position at the top of the text rect
       top: placeBelow ? `${selectionRect.bottom + 12}px` : `${selectionRect.top - 12}px`,
-      // If placing below, we translate X center, and Y 0.
-      // If placing above, we translate X center, and Y -100% (shift up by full height).
       transform: placeBelow ? 'translate(-50%, 0)' : 'translate(-50%, -100%)',
     };
 
-    // Arrow logic:
-    // If popover is below, arrow is at the top of popover, pointing up.
-    // If popover is above, arrow is at the bottom of popover, pointing down.
     const arrowBaseClass = "absolute w-3 h-3 bg-white transform rotate-45 border-gray-200 left-1/2 -translate-x-1/2";
-    // For arrow pointing up (at top of box): border-t border-l
-    // For arrow pointing down (at bottom of box): border-b border-r
     const arrowClass = placeBelow 
       ? `${arrowBaseClass} top-[-6px] border-t border-l`
       : `${arrowBaseClass} bottom-[-6px] border-b border-r`;
@@ -264,7 +330,6 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
               </div>
             )}
             
-            {/* Popover Arrow */}
             <div className={arrowClass} style={arrowStyle}></div>
           </div>
         </div>
@@ -275,7 +340,9 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
     <div className="relative">
       <div 
         className="max-w-3xl mx-auto bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden min-h-[600px]"
+        onClick={handleClick}
         onMouseUp={handleMouseUp}
+        onDoubleClick={(e) => e.preventDefault()}
         onContextMenu={(e) => e.preventDefault()}
       >
         {/* Article Header */}
@@ -285,7 +352,10 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
               {article.topic}
             </span>
             <button 
-              onClick={onGenerateNew}
+              onClick={(e) => {
+                e.stopPropagation();
+                onGenerateNew();
+              }}
               disabled={isLoading}
               className="text-gray-400 hover:text-danish-red transition-colors p-1"
               title="New article"
@@ -296,12 +366,16 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
           <h1 className="text-3xl md:text-4xl font-serif font-bold text-gray-900 leading-tight mb-2">
             {article.title}
           </h1>
-          <p className="text-sm text-gray-400 italic">Double-click a word or select a sentence to translate</p>
+          <p className="text-sm text-gray-400 italic">Click a word or select a sentence to translate</p>
         </div>
 
         {/* Article Body */}
         <div 
-          className="p-8 pt-6 font-serif text-lg leading-relaxed text-gray-800 space-y-6 selection:bg-yellow-200 selection:text-black cursor-text"
+          className="p-8 pt-6 font-serif leading-relaxed text-gray-800 space-y-6 selection:bg-yellow-200 selection:text-black cursor-text"
+          style={{ 
+             fontSize: `${textSize * 1.125}rem`,
+             lineHeight: 1.8 
+          }}
         >
           {paragraphs.map((paragraph, index) => (
             <div key={index} className="flex gap-3 group relative">
@@ -309,7 +383,7 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
                <div className="w-8 flex-shrink-0 flex justify-end pt-1.5 select-none">
                   <button
                     onClick={(e) => {
-                       e.stopPropagation(); // Prevent selection
+                       e.stopPropagation(); 
                        onSetBookmark(index);
                     }}
                     className={`transition-all duration-200 ${
