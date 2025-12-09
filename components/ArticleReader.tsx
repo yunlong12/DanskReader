@@ -1,6 +1,6 @@
 import React, { useCallback, useState, useEffect, useRef } from 'react';
 import { Article, WordDefinition } from '../types';
-import { BookOpen, RefreshCw, Loader2, Bookmark } from 'lucide-react';
+import { BookOpen, RefreshCw, Loader2, Bookmark, GripHorizontal } from 'lucide-react';
 
 interface ArticleReaderProps {
   article: Article | null;
@@ -37,6 +37,12 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
   // Track window width to ensure popover calculations are accurate on resize/rotation
   const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 0);
   
+  // Dragging state
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const isDraggingRef = useRef(false);
+  const dragStartRef = useRef({ x: 0, y: 0 });
+  const initialDragOffsetRef = useRef({ x: 0, y: 0 });
+  
   // Refs for auto-scrolling to bookmark
   const paragraphRefs = useRef<(HTMLParagraphElement | null)[]>([]);
 
@@ -48,6 +54,11 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  // Reset drag position when the definition changes (new lookup)
+  useEffect(() => {
+    setDragOffset({ x: 0, y: 0 });
+  }, [currentDefinition?.word, isTranslating]);
 
   // Scroll to bookmark when article changes
   useEffect(() => {
@@ -217,6 +228,38 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
 
   }, [onWordSelect, onClearSelection]);
 
+  // --- Drag Handling Logic ---
+  const handlePointerDown = (e: React.PointerEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    isDraggingRef.current = true;
+    dragStartRef.current = { x: e.clientX, y: e.clientY };
+    initialDragOffsetRef.current = { ...dragOffset };
+    
+    // Attach listeners to window to handle drag outside the element
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
+  };
+
+  const handlePointerMove = (e: PointerEvent) => {
+    if (!isDraggingRef.current) return;
+    
+    const deltaX = e.clientX - dragStartRef.current.x;
+    const deltaY = e.clientY - dragStartRef.current.y;
+    
+    setDragOffset({
+      x: initialDragOffsetRef.current.x + deltaX,
+      y: initialDragOffsetRef.current.y + deltaY
+    });
+  };
+
+  const handlePointerUp = () => {
+    isDraggingRef.current = false;
+    window.removeEventListener('pointermove', handlePointerMove);
+    window.removeEventListener('pointerup', handlePointerUp);
+  };
+
+
   if (!article) {
     return (
       <div className="flex flex-col items-center justify-center h-full p-8 text-center text-gray-500 min-h-[400px]">
@@ -302,7 +345,9 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
       zIndex: 50,
       left: `${popoverCenterX}px`,
       top: placeBelow ? `${selectionRect.bottom + 12}px` : `${selectionRect.top - 12}px`,
-      transform: placeBelow ? 'translate(-50%, 0)' : 'translate(-50%, -100%)',
+      // Apply the drag offset using transform
+      transform: `translate(calc(-50% + ${dragOffset.x}px), calc(${placeBelow ? '0%' : '-100%'} + ${dragOffset.y}px))`,
+      touchAction: 'none' // Important for drag performance on touch devices
     };
 
     const arrowBaseClass = "absolute w-3 h-3 bg-white transform rotate-45 border-gray-200 left-1/2 -translate-x-1/2";
@@ -311,7 +356,10 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
       : `${arrowBaseClass} bottom-[-6px] border-b border-r`;
       
     const arrowStyle: React.CSSProperties = {
-        marginLeft: `${clampedArrowOffset}px`
+        marginLeft: `${clampedArrowOffset}px`,
+        // Hide arrow if dragged away significantly
+        opacity: (Math.abs(dragOffset.x) > 20 || Math.abs(dragOffset.y) > 20) ? 0 : 1,
+        transition: 'opacity 0.2s'
     };
 
     // Determine which translation to show based on targetLang
@@ -328,48 +376,66 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
           style={popoverStyle}
           className="mb-2"
         >
-          <div className="bg-white rounded-lg shadow-xl border border-gray-200 p-4 w-72 md:w-80 animate-in fade-in zoom-in duration-200 overflow-hidden flex flex-col max-h-[400px]">
-            {isTranslating ? (
-              <div className="flex items-center justify-center py-4 text-gray-400 gap-2">
-                <Loader2 size={16} className="animate-spin" />
-                <span className="text-sm font-medium">Translating...</span>
-              </div>
-            ) : currentDefinition && (
-              <div className="overflow-y-auto pr-1 custom-scrollbar text-gray-900">
-                <div className="flex items-start justify-between mb-1">
-                  <h3 className="font-bold text-danish-red text-xl leading-tight break-words pr-2">
-                    {currentDefinition.word}
-                  </h3>
-                </div>
-                
-                <div className="flex flex-wrap items-center gap-2 mb-3 mt-1">
-                  <span className="text-sm text-gray-500 italic font-serif">/{currentDefinition.pronunciation}/</span>
-                  <span className="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded-md font-medium">
-                    {currentDefinition.partOfSpeech}
-                  </span>
-                </div>
+          <div className="bg-white rounded-lg shadow-xl border border-gray-200 w-72 md:w-80 animate-in fade-in zoom-in duration-200 overflow-hidden flex flex-col max-h-[400px]">
+            {/* Top Drag Handle */}
+            <div 
+              onPointerDown={handlePointerDown}
+              className="h-6 bg-gray-50 border-b border-gray-100 flex items-center justify-center cursor-move touch-none hover:bg-gray-100 transition-colors shrink-0"
+            >
+              <GripHorizontal size={16} className="text-gray-300" />
+            </div>
 
-                <div className="space-y-2">
-                  <div className="flex items-start gap-2">
-                    <p className="text-base font-medium text-gray-900 leading-snug">
-                      {displayTranslation || "No translation available"}
-                    </p>
+            <div className="p-4 pt-2 flex-1 overflow-hidden flex flex-col">
+              {isTranslating ? (
+                <div className="flex items-center justify-center py-4 text-gray-400 gap-2">
+                  <Loader2 size={16} className="animate-spin" />
+                  <span className="text-sm font-medium">Translating...</span>
+                </div>
+              ) : currentDefinition && (
+                <div className="overflow-y-auto pr-1 custom-scrollbar text-gray-900 max-h-[340px]">
+                  <div className="flex items-start justify-between mb-1">
+                    <h3 className="font-bold text-danish-red text-xl leading-tight break-words pr-2">
+                      {currentDefinition.word}
+                    </h3>
+                  </div>
+                  
+                  <div className="flex flex-wrap items-center gap-2 mb-3 mt-1">
+                    <span className="text-sm text-gray-500 italic font-serif">/{currentDefinition.pronunciation}/</span>
+                    <span className="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded-md font-medium">
+                      {currentDefinition.partOfSpeech}
+                    </span>
                   </div>
 
-                  {showDetailed && displayDetailed && (
-                    <div className="pt-3 mt-2 border-t border-gray-100 animate-in fade-in duration-300">
-                      <p className="text-xs font-bold text-purple-500 uppercase tracking-wider mb-1">Detailed Explanation</p>
-                      <div className="mb-2">
-                         <p className="text-sm text-gray-600 leading-relaxed bg-purple-50 p-2 rounded-md border border-purple-100">
-                           {displayDetailed}
-                         </p>
-                      </div>
+                  <div className="space-y-2">
+                    <div className="flex items-start gap-2">
+                      <p className="text-base font-medium text-gray-900 leading-snug">
+                        {displayTranslation || "No translation available"}
+                      </p>
                     </div>
-                  )}
+
+                    {showDetailed && displayDetailed && (
+                      <div className="pt-3 mt-2 border-t border-gray-100 animate-in fade-in duration-300">
+                        <p className="text-xs font-bold text-purple-500 uppercase tracking-wider mb-1">Detailed Explanation</p>
+                        <div className="mb-2">
+                           <p className="text-sm text-gray-600 leading-relaxed bg-purple-50 p-2 rounded-md border border-purple-100">
+                             {displayDetailed}
+                           </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
             
+            {/* Bottom Drag Handle */}
+            <div 
+              onPointerDown={handlePointerDown}
+              className="h-6 bg-gray-50 border-t border-gray-100 flex items-center justify-center cursor-move touch-none hover:bg-gray-100 transition-colors shrink-0"
+            >
+              <GripHorizontal size={16} className="text-gray-300" />
+            </div>
+
             <div className={arrowClass} style={arrowStyle}></div>
           </div>
         </div>
