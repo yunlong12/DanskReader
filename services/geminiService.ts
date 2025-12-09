@@ -196,8 +196,38 @@ export const translateWordInContext = async (
   }
 };
 
+// --- Audio Management Globals ---
+let currentAudio: HTMLAudioElement | null = null;
+let currentResolve: (() => void) | null = null;
+
+export const stopAudio = () => {
+  // 1. Stop HTML Audio element if playing
+  if (currentAudio) {
+    currentAudio.pause();
+    currentAudio.src = ""; // Detach source to force stop buffering
+    currentAudio = null;
+  }
+  
+  // 2. Stop Web Speech API if speaking
+  if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+    window.speechSynthesis.cancel();
+  }
+
+  // 3. Resolve any pending audio promise to unblock loops/awaiters
+  if (currentResolve) {
+    currentResolve();
+    currentResolve = null;
+  }
+};
+
 export const playPronunciation = async (text: string, speed: number = 1.0): Promise<void> => {
+  // Ensure any previous audio is stopped before starting new one
+  stopAudio();
+
   return new Promise((resolve, reject) => {
+    // Capture the resolve function so we can force-resolve it if stopAudio is called externally
+    currentResolve = resolve;
+
     // Google Translate TTS GET request fails if the URL is too long. 
     // Truncate to safe limit (approx 200 chars) for playback.
     const safeText = text.length > 200 ? text.substring(0, 200) : text;
@@ -213,20 +243,24 @@ export const playPronunciation = async (text: string, speed: number = 1.0): Prom
     audio.src = url;
     audio.playbackRate = speed;
     
+    currentAudio = audio; // Track this audio instance
+    
     let hasResolved = false;
 
-    audio.onended = () => {
-      if (!hasResolved) {
-        hasResolved = true;
-        resolve();
-      }
+    // Helper to cleanup and resolve
+    const finalize = () => {
+        if (!hasResolved) {
+            hasResolved = true;
+            if (currentResolve === resolve) currentResolve = null;
+            if (currentAudio === audio) currentAudio = null;
+            resolve();
+        }
     };
+
+    audio.onended = finalize;
 
     audio.onerror = (e) => {
       if (!hasResolved) {
-        hasResolved = true;
-        console.warn("Google TTS failed (likely blocked), falling back to Web Speech API");
-        
         // Fallback to Web Speech API (Browser Native)
         if ('speechSynthesis' in window) {
            const utterance = new SpeechSynthesisUtterance(safeText);
@@ -240,17 +274,26 @@ export const playPronunciation = async (text: string, speed: number = 1.0): Prom
              utterance.voice = danishVoice;
            }
 
-           utterance.onend = () => resolve();
+           utterance.onend = finalize;
            utterance.onerror = (err) => {
              console.error("Web Speech API failed", err);
-             reject(err);
+             // Even if it fails, we resolve or reject. Here we reject if both fail.
+             if (!hasResolved) {
+                hasResolved = true;
+                if (currentResolve === resolve) currentResolve = null;
+                reject(err);
+             }
            };
            
-           // Cancel any pending speech to avoid queuing
-           window.speechSynthesis.cancel();
+           // Note: window.speechSynthesis.speak() queues utterances. 
+           // stopAudio() calls cancel() which clears the queue.
            window.speechSynthesis.speak(utterance);
         } else {
-           reject(new Error("No TTS available"));
+           if (!hasResolved) {
+               hasResolved = true;
+               if (currentResolve === resolve) currentResolve = null;
+               reject(new Error("No TTS available"));
+           }
         }
       }
     };
@@ -258,7 +301,10 @@ export const playPronunciation = async (text: string, speed: number = 1.0): Prom
     audio.play().catch(error => {
       // If play() fails (e.g. autoplay policy), trigger error handler to try fallback
       console.warn("Audio play failed, attempting fallback", error);
-      audio.dispatchEvent(new Event('error'));
+      if (!hasResolved) {
+        // Dispatch error manually to trigger fallback logic
+        audio.dispatchEvent(new Event('error'));
+      }
     });
   });
 };

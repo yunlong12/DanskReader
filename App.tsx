@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { generateArticle, translateWordInContext, playPronunciation } from './services/geminiService';
+import { generateArticle, translateWordInContext, playPronunciation, stopAudio } from './services/geminiService';
 import { Article, WordDefinition, HistoryItem, LoadingState } from './types';
 import ArticleReader from './components/ArticleReader';
 import ArticleGeneratorModal from './components/ArticleGeneratorModal';
@@ -153,6 +153,10 @@ function App() {
   };
 
   const handleWordSelect = async (word: string, context: string) => {
+    // IMMEDIATE STOP: Stop any existing audio (and pending auto-play loops) 
+    // the moment the user interacts with a new word.
+    stopAudio();
+
     // Generate a unique ID for this specific request interaction.
     // This allows us to cancel previous requests (like the first click of a double-click)
     // to prevent race conditions and overlapping audio loops.
