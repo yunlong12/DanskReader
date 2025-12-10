@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { generateArticle, translateWordInContext, playPronunciation, stopAudio } from './services/geminiService';
+import { translateWordInContext, playPronunciation, stopAudio } from './services/geminiService';
 import { Article, WordDefinition, HistoryItem, LoadingState, LanguageCode, SUPPORTED_LANGUAGES } from './types';
 import ArticleReader from './components/ArticleReader';
 import ArticleGeneratorModal from './components/ArticleGeneratorModal';
@@ -103,26 +103,6 @@ function App() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  const handleGenerateArticle = async (topic: string, language: LanguageCode) => {
-    setIsGeneratorOpen(false);
-    setLoadingState(LoadingState.GENERATING_ARTICLE);
-    setArticle(null); // Clear current
-    
-    try {
-      const newArticle = await generateArticle(topic, language);
-      setArticle(newArticle);
-      setArticleHistory(prev => {
-        const exists = prev.find(a => a.id === newArticle.id);
-        if (exists) return prev;
-        return [newArticle, ...prev];
-      });
-    } catch (error) {
-      alert("Failed to generate article. Please check your API key or connection.");
-    } finally {
-      setLoadingState(LoadingState.IDLE);
-    }
-  };
 
   const handlePasteArticle = (title: string, content: string, language: LanguageCode) => {
     setIsGeneratorOpen(false);
@@ -448,7 +428,7 @@ function App() {
             article={article}
             onWordSelect={handleWordSelect}
             onClearSelection={handleClearSelection}
-            isLoading={loadingState === LoadingState.GENERATING_ARTICLE}
+            isLoading={false}
             onGenerateNew={() => setIsGeneratorOpen(true)}
             currentDefinition={currentDefinition}
             isTranslating={loadingState === LoadingState.TRANSLATING}
@@ -466,7 +446,6 @@ function App() {
         onClose={() => {
             if (article) setIsGeneratorOpen(false);
         }}
-        onGenerate={handleGenerateArticle}
         onPaste={handlePasteArticle}
         articleHistory={articleHistory}
         onSelectHistory={handleSelectHistory}

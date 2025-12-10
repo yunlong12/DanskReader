@@ -6,7 +6,6 @@ import { transcribeImage } from '../services/geminiService';
 interface ArticleGeneratorModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onGenerate: (topic: string, language: LanguageCode) => void;
   onPaste: (title: string, content: string, language: LanguageCode) => void;
   articleHistory: Article[];
   onSelectHistory: (article: Article) => void;
@@ -15,15 +14,13 @@ interface ArticleGeneratorModalProps {
 const ArticleGeneratorModal: React.FC<ArticleGeneratorModalProps> = ({ 
   isOpen, 
   onClose, 
-  onGenerate,
   onPaste, 
   articleHistory,
   onSelectHistory
 }) => {
-  const [mode, setMode] = useState<'menu' | 'paste' | 'generate'>('menu');
+  const [mode, setMode] = useState<'menu' | 'paste'>('menu');
   const [pasteTitle, setPasteTitle] = useState('');
   const [pasteContent, setPasteContent] = useState('');
-  const [topic, setTopic] = useState('');
   const [selectedLanguage, setSelectedLanguage] = useState<LanguageCode>('en');
   const [isTranscribing, setIsTranscribing] = useState(false);
   
@@ -40,13 +37,6 @@ const ArticleGeneratorModal: React.FC<ArticleGeneratorModalProps> = ({
     resetForm();
   };
 
-  const handleGenerateSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!topic.trim()) return;
-    onGenerate(topic, selectedLanguage);
-    resetForm();
-  };
-
   const handleBack = () => {
     setMode('menu');
   };
@@ -54,7 +44,6 @@ const ArticleGeneratorModal: React.FC<ArticleGeneratorModalProps> = ({
   const resetForm = () => {
     setPasteTitle('');
     setPasteContent('');
-    setTopic('');
     setMode('menu');
     setIsTranscribing(false);
   };
@@ -117,7 +106,7 @@ const ArticleGeneratorModal: React.FC<ArticleGeneratorModalProps> = ({
               </button>
             )}
             <h2 className="text-xl font-bold text-gray-900">
-              {mode === 'paste' ? 'Import Content' : mode === 'generate' ? 'Generate Article' : 'Your Library'}
+              {mode === 'paste' ? 'Import Content' : 'Your Library'}
             </h2>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
@@ -131,20 +120,6 @@ const ArticleGeneratorModal: React.FC<ArticleGeneratorModalProps> = ({
             <div className="space-y-4">
               
               <div className="grid grid-cols-1 gap-3">
-                 {/* Generate New */}
-                <button
-                  onClick={() => setMode('generate')}
-                  className="w-full flex items-center gap-4 p-4 rounded-xl hover:bg-orange-50 border border-gray-100 hover:border-orange-200 transition-all text-left group"
-                >
-                  <div className="w-10 h-10 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center group-hover:bg-orange-600 group-hover:text-white transition-colors">
-                    <Globe size={20} />
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-gray-900">Generate Article</h3>
-                    <p className="text-xs text-gray-500">AI-written news topics</p>
-                  </div>
-                </button>
-
                 {/* Paste Option */}
                 <button
                   onClick={() => setMode('paste')}
@@ -234,43 +209,6 @@ const ArticleGeneratorModal: React.FC<ArticleGeneratorModalProps> = ({
                   )}
               </div>
             </div>
-          ) : mode === 'generate' ? (
-             <form onSubmit={handleGenerateSubmit} className="flex flex-col h-full space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Language</label>
-                  <select 
-                     value={selectedLanguage}
-                     onChange={(e) => setSelectedLanguage(e.target.value as LanguageCode)}
-                     className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                  >
-                     {SUPPORTED_LANGUAGES.map(lang => (
-                        <option key={lang.code} value={lang.code}>{lang.flag} {lang.name}</option>
-                     ))}
-                  </select>
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Topic</label>
-                  <input 
-                    type="text" 
-                    value={topic}
-                    onChange={(e) => setTopic(e.target.value)}
-                    placeholder="e.g., Space Exploration, Local Politics"
-                    className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                    autoFocus
-                  />
-                  <p className="text-xs text-gray-500 mt-1">AI will generate a B1/B2 level article on this topic.</p>
-                </div>
-
-                <div className="pt-2">
-                  <button 
-                    type="submit"
-                    className="w-full py-3 bg-orange-600 text-white font-bold rounded-xl hover:bg-orange-700 transition-colors shadow-sm"
-                  >
-                    Generate Article
-                  </button>
-                </div>
-             </form>
           ) : (
             <form onSubmit={handlePasteSubmit} className="flex flex-col h-full space-y-4">
                <div>

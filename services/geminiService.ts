@@ -4,49 +4,6 @@ import { Article, WordDefinition, LanguageCode, SUPPORTED_LANGUAGES } from "../t
 // Ensure API key is available
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-const articleSchema: Schema = {
-  type: Type.OBJECT,
-  properties: {
-    headline: { type: Type.STRING, description: "The headline of the news article." },
-    body: { type: Type.STRING, description: "The full body text of the article. Formatted with paragraph breaks." },
-  },
-  required: ["headline", "body"],
-};
-
-export const generateArticle = async (topic: string, languageCode: LanguageCode): Promise<Article> => {
-  try {
-    const languageName = SUPPORTED_LANGUAGES.find(l => l.code === languageCode)?.name || 'English';
-    
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash-lite",
-      contents: `Write a short, engaging news article in ${languageName} about "${topic}". 
-      It should be suitable for an intermediate language learner (B1/B2 level). 
-      Keep it around 200-300 words.`,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: articleSchema,
-        temperature: 0.7,
-      },
-    });
-
-    const text = response.text;
-    if (!text) throw new Error("No response from Gemini");
-
-    const json = JSON.parse(text);
-    
-    return {
-      id: crypto.randomUUID(),
-      title: json.headline,
-      content: json.body,
-      topic: topic,
-      language: languageCode,
-    };
-  } catch (error) {
-    console.error("Error generating article:", error);
-    throw error;
-  }
-};
-
 export const transcribeImage = async (base64Image: string, mimeType: string, languageCode: LanguageCode): Promise<string> => {
   const languageName = SUPPORTED_LANGUAGES.find(l => l.code === languageCode)?.name || 'the image\'s language';
   try {

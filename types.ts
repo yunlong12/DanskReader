@@ -46,7 +46,6 @@ export interface HistoryItem extends WordDefinition {
 
 export enum LoadingState {
   IDLE = 'IDLE',
-  GENERATING_ARTICLE = 'GENERATING_ARTICLE',
   TRANSLATING = 'TRANSLATING',
   ERROR = 'ERROR'
 }
