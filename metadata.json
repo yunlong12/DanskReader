@@ -1,5 +1,5 @@
 {
-  "name": "Dansk Reader",
-  "description": "An interactive Danish news reader that helps you learn vocabulary by translating words in context with a simple double-click.",
+  "name": "Multilingual Reader",
+  "description": "An interactive multilingual reader that helps you learn vocabulary by translating words in context with a simple double-click.",
   "requestFramePermissions": []
 }
