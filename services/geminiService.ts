@@ -145,7 +145,7 @@ export const translateWordInContext = async (
     let instructions = `${basePrompt} to ${targetLangName}.`;
     
     // Explicitly instruct to act like Google Translate for the main fields, but allow detail in the explanation field
-    instructions += ` You are a translator tool. For the 'translation' field, act like Google Translate: direct and standard. For the 'detailedExplanation' field, act like a language tutor: explain nuances, usage, and synonyms.`;
+    instructions += ` You are a translator tool. For the 'translation' field, act like Google Translate: direct and standard. For the 'detailedExplanation' field, act like a language tutor: explain nuances, usage, and synonyms, but keep it concise (approx. 30-50 words).`;
     
     const contextInstruction = `The text appears in this context: "${contextSentence}". Provide the most appropriate meaning for this specific context.`;
     
@@ -156,7 +156,7 @@ export const translateWordInContext = async (
       pronunciation: { type: Type.STRING, description: "IPA pronunciation or phonetic transcription." },
       partOfSpeech: { type: Type.STRING, description: "Grammatical type (noun, verb, etc) or 'Sentence'/'Phrase'." },
       translation: { type: Type.STRING, description: `The definition/translation in ${targetLangName}. Direct translation only.` },
-      detailedExplanation: { type: Type.STRING, description: `A detailed explanation of the meaning, nuances, synonyms, and grammatical usage notes in ${targetLangName}.` }
+      detailedExplanation: { type: Type.STRING, description: `A concise explanation (max 50 words) of the meaning, nuances, synonyms, and grammatical usage notes in ${targetLangName}.` }
     };
 
     const translationSchema: Schema = {
