@@ -253,7 +253,7 @@ const ArticleGeneratorModal: React.FC<ArticleGeneratorModalProps> = ({
                     value={pasteTitle}
                     onChange={(e) => setPasteTitle(e.target.value)}
                     placeholder="e.g., Chapter 1"
-                    className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                    className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white"
                     disabled={isLoading}
                   />
                 </div>
@@ -279,7 +279,7 @@ const ArticleGeneratorModal: React.FC<ArticleGeneratorModalProps> = ({
                     value={pasteContent}
                     onChange={(e) => setPasteContent(e.target.value)}
                     placeholder="Paste your text here..."
-                    className="w-full h-full min-h-[200px] px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none font-serif text-base"
+                    className="w-full h-full min-h-[200px] px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none font-serif text-base bg-white"
                     required
                     disabled={isLoading}
                   />
