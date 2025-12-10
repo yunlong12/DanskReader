@@ -288,28 +288,22 @@ function App() {
         <div className="max-w-7xl mx-auto px-4 h-full flex items-center justify-between gap-4">
           <div className="flex items-center gap-2 flex-shrink-0">
             <div className="w-8 h-8 bg-danish-red rounded-md flex items-center justify-center text-white font-bold font-serif text-xl">M</div>
-            <h1 className="text-xl font-bold tracking-tight text-gray-900 hidden md:block">
-              Multilingual Reader
+            <h1 className="text-xl font-bold tracking-tight text-gray-900">
+              <span className="md:hidden">MR</span>
+              <span className="hidden md:inline">Multilingual Reader</span>
             </h1>
           </div>
           
           <div className="flex items-center gap-2 flex-1 overflow-x-auto no-scrollbar justify-start md:justify-end pr-2 md:pr-0">
             
-            {/* Target Language Selector */}
-            <div className="flex items-center border border-gray-200 rounded-full px-2 bg-white flex-shrink-0 h-8">
-               <Languages size={14} className="text-gray-400 mr-1" />
-               <select 
-                 value={targetLang}
-                 onChange={(e) => setTargetLang(e.target.value as LanguageCode)}
-                 className="text-xs font-semibold text-gray-700 bg-transparent border-none focus:ring-0 py-0 pl-0 pr-6 cursor-pointer outline-none h-full"
-               >
-                 {SUPPORTED_LANGUAGES.map(lang => (
-                   <option key={lang.code} value={lang.code}>{lang.flag} {lang.name}</option>
-                 ))}
-               </select>
-            </div>
-
-            <div className="h-6 w-px bg-gray-200 mx-1 flex-shrink-0"></div>
+             {/* Fullscreen Toggle */}
+             <button
+              onClick={toggleFullscreen}
+              className="flex items-center justify-center p-2 rounded-full text-gray-500 hover:bg-gray-100 border border-gray-200 flex-shrink-0"
+              title={isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
+            >
+              {isFullscreen ? <Minimize size={16} /> : <Maximize size={16} />}
+            </button>
 
             {/* Manual Translate Button */}
              <button
@@ -319,7 +313,7 @@ function App() {
               title="Translate Selected Text"
             >
               <MessageSquareQuote size={14} />
-              <span>Translate</span>
+              <span>Translate Selection</span>
             </button>
 
             {/* Text Size Control */}
@@ -400,21 +394,28 @@ function App() {
               <span>Bookmarks</span>
             </button>
 
-             {/* Fullscreen Toggle */}
-             <button
-              onClick={toggleFullscreen}
-              className="flex items-center justify-center p-2 rounded-full text-gray-500 hover:bg-gray-100 border border-gray-200 flex-shrink-0"
-              title={isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
-            >
-              {isFullscreen ? <Minimize size={16} /> : <Maximize size={16} />}
-            </button>
+            <div className="h-6 w-px bg-gray-200 mx-1 flex-shrink-0"></div>
+
+            {/* Target Language Selector */}
+            <div className="flex items-center border border-gray-200 rounded-full px-2 bg-white flex-shrink-0 h-8">
+               <Languages size={14} className="text-gray-400 mr-1" />
+               <select 
+                 value={targetLang}
+                 onChange={(e) => setTargetLang(e.target.value as LanguageCode)}
+                 className="text-xs font-semibold text-gray-700 bg-transparent border-none focus:ring-0 py-0 pl-0 pr-6 cursor-pointer outline-none h-full"
+               >
+                 {SUPPORTED_LANGUAGES.map(lang => (
+                   <option key={lang.code} value={lang.code}>{lang.flag} {lang.name}</option>
+                 ))}
+               </select>
+            </div>
 
             <button 
               onClick={() => setIsGeneratorOpen(true)}
               className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-full text-sm font-medium hover:bg-gray-800 transition-colors whitespace-nowrap flex-shrink-0"
             >
               <Sparkles size={16} />
-              <span className="hidden sm:inline">Library</span>
+              <span>Library</span>
             </button>
 
           </div>
