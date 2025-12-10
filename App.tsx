@@ -58,12 +58,43 @@ function App() {
   const currentRequestIdRef = useRef<number>(0);
   // Track touch-triggered manual translate to avoid duplicate clicks
   const manualTranslateTouchRef = useRef(false);
+  
+  // Drag to scroll refs
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [startX, setStartX] = useState(0);
+  const [scrollLeft, setScrollLeft] = useState(0);
+
   // Allow wheel-to-horizontal scroll for the controls bar
   const handleControlsWheel = (e: React.WheelEvent<HTMLDivElement>) => {
     if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
       e.preventDefault();
       e.currentTarget.scrollLeft += e.deltaY;
     }
+  };
+
+  // Drag to scroll handlers for desktop
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (!scrollContainerRef.current) return;
+    setIsDragging(true);
+    setStartX(e.pageX - scrollContainerRef.current.offsetLeft);
+    setScrollLeft(scrollContainerRef.current.scrollLeft);
+  };
+
+  const handleMouseLeave = () => {
+    setIsDragging(false);
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging || !scrollContainerRef.current) return;
+    e.preventDefault();
+    const x = e.pageX - scrollContainerRef.current.offsetLeft;
+    const walk = (x - startX) * 1.5; // scroll-fast multiplier
+    scrollContainerRef.current.scrollLeft = scrollLeft - walk;
   };
   
   // Article History State
@@ -321,8 +352,13 @@ function App() {
           </div>
           
           <div 
-            className="flex items-center gap-2 flex-1 overflow-x-auto justify-start md:justify-end pr-2 md:pr-0"
+            ref={scrollContainerRef}
+            className={`flex items-center gap-2 flex-1 overflow-x-auto justify-start pr-2 md:pr-0 no-scrollbar ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
             onWheel={handleControlsWheel}
+            onMouseDown={handleMouseDown}
+            onMouseLeave={handleMouseLeave}
+            onMouseUp={handleMouseUp}
+            onMouseMove={handleMouseMove}
           >
             
              {/* Fullscreen Toggle */}
