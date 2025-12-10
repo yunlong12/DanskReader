@@ -293,15 +293,15 @@ function App() {
             </h1>
           </div>
           
-          <div className="flex items-center gap-2 flex-1 overflow-x-auto no-scrollbar justify-end">
+          <div className="flex items-center gap-2 flex-1 overflow-x-auto no-scrollbar justify-start md:justify-end pr-2 md:pr-0">
             
             {/* Target Language Selector */}
-            <div className="flex items-center border border-gray-200 rounded-full px-2 bg-white flex-shrink-0">
+            <div className="flex items-center border border-gray-200 rounded-full px-2 bg-white flex-shrink-0 h-8">
                <Languages size={14} className="text-gray-400 mr-1" />
                <select 
                  value={targetLang}
                  onChange={(e) => setTargetLang(e.target.value as LanguageCode)}
-                 className="text-xs font-semibold text-gray-700 bg-transparent border-none focus:ring-0 py-1.5 pl-0 pr-6 cursor-pointer outline-none"
+                 className="text-xs font-semibold text-gray-700 bg-transparent border-none focus:ring-0 py-0 pl-0 pr-6 cursor-pointer outline-none h-full"
                >
                  {SUPPORTED_LANGUAGES.map(lang => (
                    <option key={lang.code} value={lang.code}>{lang.flag} {lang.name}</option>
@@ -319,18 +319,18 @@ function App() {
               title="Translate Selected Text"
             >
               <MessageSquareQuote size={14} />
-              <span className="hidden sm:inline">Translate</span>
+              <span>Translate</span>
             </button>
 
             {/* Text Size Control */}
-            <div className="flex items-center border border-gray-200 rounded-full bg-white flex-shrink-0">
-              <button onClick={handleDecreaseTextSize} className="px-2 py-1.5 hover:bg-gray-50 text-gray-500 rounded-l-full">
+            <div className="flex items-center border border-gray-200 rounded-full bg-white flex-shrink-0 h-8">
+              <button onClick={handleDecreaseTextSize} className="px-2 h-full hover:bg-gray-50 text-gray-500 rounded-l-full flex items-center justify-center">
                 <Minus size={14} />
               </button>
               <div className="px-1 text-xs font-medium text-gray-400 flex items-center gap-0.5 border-x border-gray-100 h-4 leading-4">
                 <Type size={12} />
               </div>
-              <button onClick={handleIncreaseTextSize} className="px-2 py-1.5 hover:bg-gray-50 text-gray-500 rounded-r-full">
+              <button onClick={handleIncreaseTextSize} className="px-2 h-full hover:bg-gray-50 text-gray-500 rounded-r-full flex items-center justify-center">
                 <Plus size={14} />
               </button>
             </div>
@@ -345,13 +345,13 @@ function App() {
               }`}
             >
               <Palette size={14} />
-              <span className="hidden sm:inline">{getThemeLabel()}</span>
+              <span>{getThemeLabel()}</span>
             </button>
 
             {/* Auto Play Toggle */}
             <button
               onClick={cycleAutoPlay}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border whitespace-nowrap flex-shrink-0 hidden sm:flex ${
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border whitespace-nowrap flex-shrink-0 ${
                 autoPlayCount > 0
                   ? 'bg-blue-50 text-blue-600 border-blue-200 ring-1 ring-blue-200' 
                   : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
@@ -364,7 +364,7 @@ function App() {
             {/* Speed Toggle */}
             <button
               onClick={cyclePlaybackSpeed}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border whitespace-nowrap flex-shrink-0 hidden sm:flex ${
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border whitespace-nowrap flex-shrink-0 ${
                 playbackSpeed < 1.0
                   ? 'bg-amber-50 text-amber-700 border-amber-200 ring-1 ring-amber-200' 
                   : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
@@ -377,7 +377,7 @@ function App() {
             {/* Detailed Toggle */}
             <button
               onClick={() => setShowDetailed(!showDetailed)}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border whitespace-nowrap flex-shrink-0 hidden lg:flex ${
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border whitespace-nowrap flex-shrink-0 ${
                 showDetailed 
                   ? 'bg-purple-50 text-purple-600 border-purple-200 ring-1 ring-purple-200' 
                   : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
@@ -390,7 +390,7 @@ function App() {
             {/* Bookmarks Toggle */}
             <button
               onClick={() => setBookmarksEnabled(!bookmarksEnabled)}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border whitespace-nowrap flex-shrink-0 hidden lg:flex ${
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border whitespace-nowrap flex-shrink-0 ${
                 bookmarksEnabled
                   ? 'bg-teal-50 text-teal-600 border-teal-200 ring-1 ring-teal-200' 
                   : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
@@ -403,7 +403,7 @@ function App() {
              {/* Fullscreen Toggle */}
              <button
               onClick={toggleFullscreen}
-              className="flex items-center justify-center p-2 rounded-full text-gray-500 hover:bg-gray-100 border border-gray-200 flex-shrink-0 hidden lg:flex"
+              className="flex items-center justify-center p-2 rounded-full text-gray-500 hover:bg-gray-100 border border-gray-200 flex-shrink-0"
               title={isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
             >
               {isFullscreen ? <Minimize size={16} /> : <Maximize size={16} />}
