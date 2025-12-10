@@ -4,8 +4,64 @@ import { Article, WordDefinition, LanguageCode, SUPPORTED_LANGUAGES } from "../t
 // Ensure API key is available
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-export const transcribeImage = async (base64Image: string, mimeType: string, languageCode: LanguageCode): Promise<string> => {
-  const languageName = SUPPORTED_LANGUAGES.find(l => l.code === languageCode)?.name || 'the image\'s language';
+export const detectLanguage = async (text: string): Promise<{ code: LanguageCode | null; name: string; isSupported: boolean }> => {
+  if (!text || text.trim().length === 0) {
+    return { code: null, name: "Unknown", isSupported: false };
+  }
+
+  // Sample the text to save tokens/latency
+  const snippet = text.substring(0, 500).replace(/\s+/g, ' ');
+
+  try {
+    const prompt = `Identify the language of the following text sample: "${snippet}". 
+    Return a JSON object with:
+    - 'code': The 2-letter ISO 639-1 language code (e.g., 'en', 'fr', 'es', 'de', 'ja', 'ko'). For Chinese, use 'zh'.
+    - 'name': The English name of the language.
+    `;
+
+    const detectionSchema: Schema = {
+      type: Type.OBJECT,
+      properties: {
+        code: { type: Type.STRING },
+        name: { type: Type.STRING }
+      },
+      required: ["code", "name"],
+    };
+
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash-lite",
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: detectionSchema,
+        temperature: 0.1,
+      },
+    });
+
+    const result = JSON.parse(response.text || "{}");
+    let code = result.code?.toLowerCase() || "";
+    const name = result.name || "Unknown";
+
+    // Normalize codes
+    if (code.startsWith('zh')) code = 'zh';
+
+    // Check support
+    const supportedLang = SUPPORTED_LANGUAGES.find(l => l.code === code);
+
+    return {
+      code: supportedLang ? supportedLang.code : null,
+      name: name,
+      isSupported: !!supportedLang
+    };
+
+  } catch (error) {
+    console.error("Language detection failed:", error);
+    // Fallback default
+    return { code: null, name: "Unknown", isSupported: false };
+  }
+};
+
+export const transcribeImage = async (base64Image: string, mimeType: string): Promise<string> => {
   try {
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash-lite",
@@ -17,7 +73,7 @@ export const transcribeImage = async (base64Image: string, mimeType: string, lan
           }
         },
         {
-          text: `Transcribe the text contained in this image exactly as it appears. The text is likely in ${languageName}. Do not add any introductory text, translation, or markdown formatting (like \`\`\`). Just return the raw text. If there are headers, keep them on separate lines.`
+          text: `Transcribe the text contained in this image exactly as it appears. Do not add any introductory text, translation, or markdown formatting (like \`\`\`). Just return the raw text. If there are headers, keep them on separate lines.`
         }
       ]
     });
@@ -159,7 +215,7 @@ export const stopAudio = () => {
 
   // 3. Resolve any pending audio promise to unblock loops/awaiters
   if (currentResolve) {
-    currentResolve();
+    currentResolve = null;
     currentResolve = null;
   }
 };

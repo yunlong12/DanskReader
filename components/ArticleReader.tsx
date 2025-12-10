@@ -18,6 +18,14 @@ interface ArticleReaderProps {
   bookmarksEnabled: boolean;
 }
 
+// Helper interface for positioning
+interface PopoverPosition {
+  top: number;
+  left: number;
+  width: number;
+  height: number;
+}
+
 const ArticleReader: React.FC<ArticleReaderProps> = ({ 
   article, 
   onWordSelect, 
@@ -32,7 +40,8 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
   readingTheme,
   bookmarksEnabled
 }) => {
-  const [selectionRect, setSelectionRect] = useState<DOMRect | null>(null);
+  const [popoverPos, setPopoverPos] = useState<PopoverPosition | null>(null);
+  
   // Track window width to ensure popover calculations are accurate on resize/rotation
   const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 0);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
@@ -43,10 +52,9 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
   const dragStartRef = useRef({ x: 0, y: 0 });
   const initialDragOffsetRef = useRef({ x: 0, y: 0 });
   
-  // Refs for auto-scrolling to bookmark
+  // Refs
+  const containerRef = useRef<HTMLDivElement>(null);
   const paragraphRefs = useRef<(HTMLParagraphElement | null)[]>([]);
-
-  // Flag to prevent 'click' event from firing immediately after a selection is made on mobile
   const isSelectingRef = useRef(false);
 
   useEffect(() => {
@@ -73,32 +81,24 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
     }
   }, [article?.id, article?.bookmarkParagraphIndex]);
 
-  // Force update selection rect when translation starts
-  useEffect(() => {
-    if (isTranslating) {
-      const selection = window.getSelection();
-      if (selection && !selection.isCollapsed && selection.rangeCount > 0) {
-        const range = selection.getRangeAt(0);
-        const rect = range.getBoundingClientRect();
-        
-        // Only update if significantly different to avoid render loops
-        setSelectionRect(prev => {
-            if (!prev) return rect;
-            
-            const isSame = 
-                Math.abs(prev.x - rect.x) < 2 &&
-                Math.abs(prev.y - rect.y) < 2 &&
-                Math.abs(prev.width - rect.width) < 2 &&
-                Math.abs(prev.height - rect.height) < 2;
-                
-            return isSame ? prev : rect;
-        });
-      }
-    }
-  }, [isTranslating]);
+  // Helper to update popover position state from a DOMRect range
+  const updatePopoverPosition = (rangeRect: DOMRect) => {
+    if (!containerRef.current) return;
+    
+    const containerRect = containerRef.current.getBoundingClientRect();
+    
+    // We calculate position RELATIVE to the container.
+    // This allows us to use position: absolute inside the container,
+    // so the popover scrolls WITH the content naturally.
+    setPopoverPos({
+      top: rangeRect.top - containerRect.top,
+      left: rangeRect.left - containerRect.left,
+      width: rangeRect.width,
+      height: rangeRect.height
+    });
+  };
 
   // Helper to check if a character is part of a word (Latin, Cyrillic, Greek, etc.)
-  // For CJK, we use a different strategy, but this helper is for expansion logic.
   const isWordChar = (char: string) => {
     return /[a-zA-Z0-9\-\u00C0-\u024F\u1E00-\u1EFF\u0400-\u04FF\u0370-\u03FF\uAC00-\uD7AF]/.test(char);
   };
@@ -132,14 +132,11 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
 
       const range = selection.getRangeAt(0);
       const rect = range.getBoundingClientRect();
-      setSelectionRect(rect);
+      updatePopoverPosition(rect);
 
       // Mark that a selection action took place to prevent conflict with click
       isSelectingRef.current = true;
       setTimeout(() => { isSelectingRef.current = false; }, 500);
-
-      // We do NOT trigger automatic translation here.
-      // The user must click the "Translate Selection" button.
       
     }, 10);
   }, []);
@@ -184,7 +181,7 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
 
     // Ensure we hit a text node
     if (!textNode || textNode.nodeType !== Node.TEXT_NODE) {
-      setSelectionRect(null);
+      setPopoverPos(null);
       onClearSelection();
       return;
     }
@@ -195,7 +192,6 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
     let end = offset;
 
     // Strategy 1: Intl.Segmenter for languages that support it reliably (especially CJK)
-    // If the browser supports Segmenter and we are in a language that typically needs it (zh, ja)
     const needsSegmentation = ['zh', 'ja', 'ko'].includes(article.language);
     
     if (needsSegmentation && typeof Intl !== 'undefined' && (Intl as any).Segmenter) {
@@ -215,7 +211,7 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
         }
     } 
     
-    // Strategy 2: Fallback Regex expansion (Latin, or if Segmenter unavailable/failed)
+    // Strategy 2: Fallback Regex expansion
     if (!clickedWord) {
          // Look backwards
         while (start > 0 && isWordChar(text[start - 1])) {
@@ -230,14 +226,13 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
     }
 
     // Filter out clicks on whitespace or purely punctuation
-    // Updated punctuation check to include CJK punctuation ranges
     if (!clickedWord || /^[\s\u2000-\u206F\u2E00-\u2E7F\\'!"#$%&()*+,\-.\/:;<=>?@\[\]^`{|}~.。，、？；：‘“’”【】（）…—]+$/.test(clickedWord)) {
-      setSelectionRect(null);
+      setPopoverPos(null);
       onClearSelection();
       return;
     }
 
-    // Get context (block element text)
+    // Get context
     let context = "";
     let el = textNode.parentElement;
     const validContextTags = ['P', 'DIV', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'LI', 'BLOCKQUOTE'];
@@ -252,8 +247,7 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
     measureRange.setEnd(textNode, end);
     const rect = measureRange.getBoundingClientRect();
     
-    setSelectionRect(rect);
-    // Pass false for isSentence because this was a single click
+    updatePopoverPosition(rect);
     onWordSelect(clickedWord, context, false);
 
   }, [onWordSelect, onClearSelection, article]);
@@ -348,39 +342,44 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
 
   // Render logic for popover placement
   const renderPopover = () => {
-    if (!selectionRect || (!isTranslating && !currentDefinition)) return null;
+    if (!popoverPos || (!isTranslating && !currentDefinition)) return null;
 
     // Smart positioning logic
-    const spaceAbove = selectionRect.top;
-    const placeBelow = spaceAbove < 250;
+    const topSpace = popoverPos.top;
     
-    // Constants for width calculation
+    // We are inside a relative container, so top is relative to it.
+    // However, for "above/below" logic, we usually care about screen space.
+    // But since the header is fixed, we mainly care about not being clipped by the top of the viewport.
+    // A simplified heuristic: if we are near the top of the container (< 250px), place below.
+    // Ideally we'd use getBoundingClientRect() of the container to check visibility, but this is a reasonable proxy.
+    const placeBelow = topSpace < 200;
+    
     const isMobile = windowWidth < 768;
     const popoverWidth = isMobile ? 288 : 320; 
-    const margin = 12; // Safety margin from screen edge
+    
+    // Center horizontally relative to word
+    const wordCenterX = popoverPos.left + (popoverPos.width / 2);
+    
+    // Since we are inside the container, we just need to clamp to container width
+    const containerWidth = containerRef.current ? containerRef.current.offsetWidth : windowWidth;
+    const margin = 12;
 
-    // Calculate horizontal position
-    const textCenter = selectionRect.left + (selectionRect.width / 2);
-    
-    // Clamp the center position of the popover so it stays within screen bounds
     const minCenterX = (popoverWidth / 2) + margin;
-    const maxCenterX = windowWidth - (popoverWidth / 2) - margin;
+    const maxCenterX = containerWidth - (popoverWidth / 2) - margin;
+    const popoverCenterX = Math.max(minCenterX, Math.min(wordCenterX, maxCenterX));
     
-    const popoverCenterX = Math.max(minCenterX, Math.min(textCenter, maxCenterX));
-    
-    const arrowOffset = textCenter - popoverCenterX;
-    
+    const arrowOffset = wordCenterX - popoverCenterX;
     const maxArrowOffset = (popoverWidth / 2) - 24; 
     const clampedArrowOffset = Math.max(-maxArrowOffset, Math.min(arrowOffset, maxArrowOffset));
 
     const popoverStyle: React.CSSProperties = {
-      position: 'fixed',
-      zIndex: 50,
+      position: 'absolute', // Changed from fixed to absolute
+      zIndex: 40, // Below header (50)
       left: `${popoverCenterX}px`,
-      top: placeBelow ? `${selectionRect.bottom + 12}px` : `${selectionRect.top - 12}px`,
-      // Apply the drag offset using transform
+      // Add a bit of space (12px) + height of word
+      top: placeBelow ? `${popoverPos.top + popoverPos.height + 12}px` : `${popoverPos.top - 12}px`,
       transform: `translate(calc(-50% + ${dragOffset.x}px), calc(${placeBelow ? '0%' : '-100%'} + ${dragOffset.y}px))`,
-      touchAction: 'none' // Important for drag performance on touch devices
+      touchAction: 'none'
     };
 
     const arrowBaseClass = "absolute w-3 h-3 bg-white transform rotate-45 border-gray-200 left-1/2 -translate-x-1/2";
@@ -390,7 +389,6 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
       
     const arrowStyle: React.CSSProperties = {
         marginLeft: `${clampedArrowOffset}px`,
-        // Hide arrow if dragged away significantly
         opacity: (Math.abs(dragOffset.x) > 20 || Math.abs(dragOffset.y) > 20) ? 0 : 1,
         transition: 'opacity 0.2s'
     };
@@ -408,23 +406,19 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
             <div 
               className="h-8 bg-gray-50 border-b border-gray-100 flex items-center justify-between px-2 shrink-0 select-none"
             >
-              {/* Spacer for balance */}
               <div className="w-6" />
-
-              {/* Grip Handle - Draggable */}
               <div 
                 onPointerDown={handlePointerDown}
                 className="flex-1 flex items-center justify-center cursor-move h-full touch-none hover:bg-gray-100 transition-colors"
               >
                 <GripHorizontal size={16} className="text-gray-300" />
               </div>
-
-              {/* Close Button */}
               <button
                 onPointerDown={(e) => e.stopPropagation()}
                 onClick={(e) => {
                   e.stopPropagation();
                   onClearSelection();
+                  setPopoverPos(null);
                 }}
                 className="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
                 title="Close"
@@ -486,7 +480,6 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
               )}
             </div>
             
-            {/* Bottom Drag Handle */}
             <div 
               onPointerDown={handlePointerDown}
               className="h-6 bg-gray-50 border-t border-gray-100 flex items-center justify-center cursor-move touch-none hover:bg-gray-100 transition-colors shrink-0"
@@ -501,9 +494,9 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
   };
 
   return (
-    <div className="relative">
+    <div className="relative" ref={containerRef}>
       <div 
-        className={`max-w-3xl mx-auto rounded-xl shadow-sm border overflow-hidden min-h-[600px] transition-colors duration-300 ${themeStyles.container}`}
+        className={`max-w-3xl mx-auto rounded-xl shadow-sm border min-h-[600px] transition-colors duration-300 ${themeStyles.container}`}
         onClick={handleClick}
         onMouseUp={handleMouseUp}
         onTouchEnd={handleMouseUp}

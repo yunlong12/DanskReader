@@ -282,10 +282,10 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col font-sans overflow-hidden">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-30 flex-shrink-0">
-        <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between gap-4">
+    <div className="min-h-screen bg-gray-50 flex flex-col font-sans">
+      {/* Header - Fixed to top */}
+      <header className="fixed top-0 left-0 right-0 z-50 bg-white border-b border-gray-200 shadow-sm h-16 flex-shrink-0">
+        <div className="max-w-7xl mx-auto px-4 h-full flex items-center justify-between gap-4">
           <div className="flex items-center gap-2 flex-shrink-0">
             <div className="w-8 h-8 bg-danish-red rounded-md flex items-center justify-center text-white font-bold font-serif text-xl">P</div>
             <h1 className="text-xl font-bold tracking-tight text-gray-900 hidden md:block">
@@ -421,9 +421,9 @@ function App() {
         </div>
       </header>
 
-      {/* Main Content */}
-      <div className="flex-1 max-w-7xl w-full mx-auto flex relative items-start overflow-hidden">
-        <main className="flex-1 p-4 md:p-8 w-full min-w-0 h-full overflow-y-auto custom-scrollbar">
+      {/* Main Content - Padded to account for fixed header */}
+      <div className="pt-16 flex-1 max-w-7xl w-full mx-auto flex flex-col relative items-start min-h-screen">
+        <main className="flex-1 p-4 md:p-8 w-full min-w-0">
           <ArticleReader 
             article={article}
             onWordSelect={handleWordSelect}
