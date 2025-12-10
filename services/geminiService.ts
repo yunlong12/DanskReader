@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type, Schema } from "@google/genai";
-import { Article, WordDefinition } from "../types";
+import { Article, WordDefinition, LanguageCode, SUPPORTED_LANGUAGES } from "../types";
 
 // Ensure API key is available
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -7,17 +7,19 @@ const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 const articleSchema: Schema = {
   type: Type.OBJECT,
   properties: {
-    headline: { type: Type.STRING, description: "The headline of the news article in Danish." },
-    body: { type: Type.STRING, description: "The full body text of the article in Danish. Formatted with paragraph breaks." },
+    headline: { type: Type.STRING, description: "The headline of the news article." },
+    body: { type: Type.STRING, description: "The full body text of the article. Formatted with paragraph breaks." },
   },
   required: ["headline", "body"],
 };
 
-export const generateArticle = async (topic: string): Promise<Article> => {
+export const generateArticle = async (topic: string, languageCode: LanguageCode): Promise<Article> => {
   try {
+    const languageName = SUPPORTED_LANGUAGES.find(l => l.code === languageCode)?.name || 'English';
+    
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash-lite",
-      contents: `Write a short, engaging news article in Danish about "${topic}". 
+      contents: `Write a short, engaging news article in ${languageName} about "${topic}". 
       It should be suitable for an intermediate language learner (B1/B2 level). 
       Keep it around 200-300 words.`,
       config: {
@@ -37,6 +39,7 @@ export const generateArticle = async (topic: string): Promise<Article> => {
       title: json.headline,
       content: json.body,
       topic: topic,
+      language: languageCode,
     };
   } catch (error) {
     console.error("Error generating article:", error);
@@ -44,7 +47,8 @@ export const generateArticle = async (topic: string): Promise<Article> => {
   }
 };
 
-export const transcribeImage = async (base64Image: string, mimeType: string): Promise<string> => {
+export const transcribeImage = async (base64Image: string, mimeType: string, languageCode: LanguageCode): Promise<string> => {
+  const languageName = SUPPORTED_LANGUAGES.find(l => l.code === languageCode)?.name || 'the image\'s language';
   try {
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash-lite",
@@ -56,7 +60,7 @@ export const transcribeImage = async (base64Image: string, mimeType: string): Pr
           }
         },
         {
-          text: "Transcribe the text contained in this image exactly as it appears. The text is in Danish. Do not add any introductory text, translation, or markdown formatting (like ```). Just return the raw Danish text. If there are headers, keep them on separate lines."
+          text: `Transcribe the text contained in this image exactly as it appears. The text is likely in ${languageName}. Do not add any introductory text, translation, or markdown formatting (like \`\`\`). Just return the raw text. If there are headers, keep them on separate lines.`
         }
       ]
     });
@@ -69,9 +73,12 @@ export const transcribeImage = async (base64Image: string, mimeType: string): Pr
 };
 
 // Helper to fetch from Google Translate (Unofficial)
-const fetchGoogleTranslation = async (text: string, targetLang: string): Promise<string> => {
-  // Using client=gtx endpoint
-  const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=da&tl=${targetLang}&dt=t&q=${encodeURIComponent(text)}`;
+const fetchGoogleTranslation = async (text: string, sourceLang: string, targetLang: string): Promise<string> => {
+  // Map our language codes to Google Translate codes if necessary (zh -> zh-CN is standard)
+  const sl = sourceLang === 'zh' ? 'zh-CN' : sourceLang;
+  const tl = targetLang === 'zh' ? 'zh-CN' : targetLang;
+
+  const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${sl}&tl=${tl}&dt=t&q=${encodeURIComponent(text)}`;
   const response = await fetch(url);
   if (!response.ok) {
     throw new Error(`Google Translate API failed: ${response.statusText}`);
@@ -85,33 +92,30 @@ const fetchGoogleTranslation = async (text: string, targetLang: string): Promise
 export const translateWordInContext = async (
   textToTranslate: string, 
   contextSentence: string, 
-  targetLang: 'en' | 'zh' = 'en',
+  sourceLang: LanguageCode,
+  targetLang: LanguageCode,
   requestDetailed: boolean = false
 ): Promise<WordDefinition> => {
   
+  const sourceLangName = SUPPORTED_LANGUAGES.find(l => l.code === sourceLang)?.name || sourceLang;
+  const targetLangName = SUPPORTED_LANGUAGES.find(l => l.code === targetLang)?.name || targetLang;
+
   // HYBRID STRATEGY:
   // If detailed explanation is NOT requested, try to use Google Translate first (Free, 0 tokens).
   // If that fails (e.g. network/CORS), or if detailed explanation IS requested, use Gemini.
   if (!requestDetailed) {
     try {
-      const googleLangCode = targetLang === 'zh' ? 'zh-CN' : 'en';
-      const translationResult = await fetchGoogleTranslation(textToTranslate, googleLangCode);
+      const translationResult = await fetchGoogleTranslation(textToTranslate, sourceLang, targetLang);
       
-      const result: WordDefinition = {
+      return {
         word: textToTranslate,
         contextParams: contextSentence,
         pronunciation: "", // GT simple endpoint doesn't return IPA easily
         partOfSpeech: "Text", // Generic fallback
-        // No detailed explanations
+        translation: translationResult,
+        sourceLanguage: sourceLang,
+        targetLanguage: targetLang
       };
-
-      if (targetLang === 'zh') {
-        result.chineseTranslation = translationResult;
-      } else {
-        result.translation = translationResult;
-      }
-
-      return result;
     } catch (error) {
       console.warn("Google Translate failed, falling back to Gemini", error);
       // Fallback to Gemini below
@@ -122,15 +126,10 @@ export const translateWordInContext = async (
     const isPhrase = textToTranslate.trim().includes(' ');
     
     const basePrompt = isPhrase 
-        ? `Translate the Danish text "${textToTranslate}"`
-        : `Translate the Danish word "${textToTranslate}"`;
+        ? `Translate the ${sourceLangName} text "${textToTranslate}"`
+        : `Translate the ${sourceLangName} word "${textToTranslate}"`;
 
-    let instructions = basePrompt;
-    if (targetLang === 'zh') {
-        instructions += ` Provide the Simplified Chinese translation.`;
-    } else {
-        instructions += ` Provide the English translation.`;
-    }
+    let instructions = `${basePrompt} to ${targetLangName}.`;
     
     // Explicitly instruct to act like Google Translate for the main fields, but allow detail in the explanation field
     instructions += ` You are a translator tool. For the 'translation' field, act like Google Translate: direct and standard. For the 'detailedExplanation' field, act like a language tutor: explain nuances, usage, and synonyms.`;
@@ -143,26 +142,14 @@ export const translateWordInContext = async (
     const schemaProperties: any = {
       pronunciation: { type: Type.STRING, description: "IPA pronunciation or phonetic transcription." },
       partOfSpeech: { type: Type.STRING, description: "Grammatical type (noun, verb, etc) or 'Sentence'/'Phrase'." },
+      translation: { type: Type.STRING, description: `The definition/translation in ${targetLangName}. Direct translation only.` },
+      detailedExplanation: { type: Type.STRING, description: `A detailed explanation of the meaning, nuances, synonyms, and grammatical usage notes in ${targetLangName}.` }
     };
-
-    const requiredFields = ["pronunciation", "partOfSpeech"];
-
-    if (targetLang === 'zh') {
-       schemaProperties.chineseTranslation = { type: Type.STRING, description: "The definition/translation in Simplified Chinese. MUST be in Chinese. Direct translation only." };
-       schemaProperties.detailedChineseExplanation = { type: Type.STRING, description: "A detailed explanation of the meaning, nuances, synonyms, and grammatical usage notes in Simplified Chinese." };
-       requiredFields.push("chineseTranslation");
-       requiredFields.push("detailedChineseExplanation");
-    } else {
-       schemaProperties.translation = { type: Type.STRING, description: "The definition/translation in English. MUST be in English. Direct translation only." };
-       schemaProperties.detailedExplanation = { type: Type.STRING, description: "A detailed explanation of the meaning, nuances, synonyms, and grammatical usage notes in English." };
-       requiredFields.push("translation");
-       requiredFields.push("detailedExplanation");
-    }
 
     const translationSchema: Schema = {
       type: Type.OBJECT,
       properties: schemaProperties,
-      required: requiredFields,
+      required: ["pronunciation", "partOfSpeech", "translation", "detailedExplanation"],
     };
 
     const response = await ai.models.generateContent({
@@ -184,11 +171,11 @@ export const translateWordInContext = async (
       word: textToTranslate,
       contextParams: contextSentence,
       translation: json.translation,
-      chineseTranslation: json.chineseTranslation,
       pronunciation: json.pronunciation,
       partOfSpeech: json.partOfSpeech,
       detailedExplanation: json.detailedExplanation,
-      detailedChineseExplanation: json.detailedChineseExplanation,
+      sourceLanguage: sourceLang,
+      targetLanguage: targetLang
     };
   } catch (error) {
     console.error("Error translating word:", error);
@@ -220,9 +207,13 @@ export const stopAudio = () => {
   }
 };
 
-export const playPronunciation = async (text: string, speed: number = 1.0): Promise<void> => {
+export const playPronunciation = async (text: string, languageCode: LanguageCode, speed: number = 1.0): Promise<void> => {
   // Ensure any previous audio is stopped before starting new one
   stopAudio();
+
+  const langConfig = SUPPORTED_LANGUAGES.find(l => l.code === languageCode);
+  const voiceCode = langConfig?.voice || 'en-US';
+  const googleTlCode = voiceCode.split('-')[0]; // simple code for Google TTS (e.g. 'fr' from 'fr-FR')
 
   return new Promise((resolve, reject) => {
     // Capture the resolve function so we can force-resolve it if stopAudio is called externally
@@ -234,7 +225,7 @@ export const playPronunciation = async (text: string, speed: number = 1.0): Prom
     const encodedText = encodeURIComponent(safeText);
     
     // Using client=gtx is generally more reliable for external access than tw-ob
-    const url = `https://translate.google.com/translate_tts?ie=UTF-8&client=gtx&q=${encodedText}&tl=da`;
+    const url = `https://translate.google.com/translate_tts?ie=UTF-8&client=gtx&q=${encodedText}&tl=${googleTlCode}`;
     
     // Create audio element explicitly to set referrer policy
     // This is crucial for avoiding 403 Forbidden errors on deployed sites
@@ -264,14 +255,16 @@ export const playPronunciation = async (text: string, speed: number = 1.0): Prom
         // Fallback to Web Speech API (Browser Native)
         if ('speechSynthesis' in window) {
            const utterance = new SpeechSynthesisUtterance(safeText);
-           utterance.lang = 'da-DK';
+           utterance.lang = voiceCode;
            utterance.rate = speed;
            
-           // Attempt to find a Danish voice for better quality
+           // Attempt to find a matching voice for better quality
            const voices = window.speechSynthesis.getVoices();
-           const danishVoice = voices.find(v => v.lang.toLowerCase().includes('da'));
-           if (danishVoice) {
-             utterance.voice = danishVoice;
+           const preferredVoice = voices.find(v => v.lang.replace('_', '-').toLowerCase() === voiceCode.toLowerCase());
+           const fallbackVoice = voices.find(v => v.lang.toLowerCase().startsWith(googleTlCode));
+           
+           if (preferredVoice || fallbackVoice) {
+             utterance.voice = preferredVoice || fallbackVoice || null;
            }
 
            utterance.onend = finalize;

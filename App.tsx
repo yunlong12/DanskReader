@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { generateArticle, translateWordInContext, playPronunciation, stopAudio } from './services/geminiService';
-import { Article, WordDefinition, HistoryItem, LoadingState } from './types';
+import { Article, WordDefinition, HistoryItem, LoadingState, LanguageCode, SUPPORTED_LANGUAGES } from './types';
 import ArticleReader from './components/ArticleReader';
 import ArticleGeneratorModal from './components/ArticleGeneratorModal';
 import { Sparkles, Volume2, Turtle, FileText, Maximize, Minimize, Plus, Minus, Type, Languages, Palette, VolumeX, Bookmark, MessageSquareQuote } from 'lucide-react';
 
 const DEFAULT_SETTINGS = {
-  targetLang: 'en' as 'en' | 'zh',
+  targetLang: 'en' as LanguageCode,
   showDetailed: false,
   autoPlayCount: 3,
   playbackSpeed: 1.0,
@@ -41,13 +41,12 @@ function App() {
 
   const [article, setArticle] = useState<Article | null>(null);
   const [currentDefinition, setCurrentDefinition] = useState<WordDefinition | null>(null);
-  const [history, setHistory] = useState<HistoryItem[]>([]); 
   const [loadingState, setLoadingState] = useState<LoadingState>(LoadingState.IDLE);
   const [isGeneratorOpen, setIsGeneratorOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   
   // User Preferences (Initialized from LocalStorage)
-  const [targetLang, setTargetLang] = useState<'en' | 'zh'>(initialSettings.targetLang);
+  const [targetLang, setTargetLang] = useState<LanguageCode>(initialSettings.targetLang);
   const [showDetailed, setShowDetailed] = useState(initialSettings.showDetailed);
   const [autoPlayCount, setAutoPlayCount] = useState<number>(initialSettings.autoPlayCount ?? 3);
   const [playbackSpeed, setPlaybackSpeed] = useState(initialSettings.playbackSpeed);
@@ -105,13 +104,13 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleGenerateArticle = async (topic: string) => {
+  const handleGenerateArticle = async (topic: string, language: LanguageCode) => {
     setIsGeneratorOpen(false);
     setLoadingState(LoadingState.GENERATING_ARTICLE);
     setArticle(null); // Clear current
     
     try {
-      const newArticle = await generateArticle(topic);
+      const newArticle = await generateArticle(topic, language);
       setArticle(newArticle);
       setArticleHistory(prev => {
         const exists = prev.find(a => a.id === newArticle.id);
@@ -125,14 +124,15 @@ function App() {
     }
   };
 
-  const handlePasteArticle = (title: string, content: string) => {
+  const handlePasteArticle = (title: string, content: string, language: LanguageCode) => {
     setIsGeneratorOpen(false);
     setLoadingState(LoadingState.IDLE);
-    const newArticle = {
+    const newArticle: Article = {
       id: crypto.randomUUID(),
       title: title,
       content: content,
       topic: 'Custom Text',
+      language: language
     };
     setArticle(newArticle);
     setArticleHistory(prev => [newArticle, ...prev]);
@@ -165,48 +165,37 @@ function App() {
   };
 
   const handleWordSelect = async (word: string, context: string, isSentence: boolean = false) => {
-    // IMMEDIATE STOP: Stop any existing audio (and pending auto-play loops) 
-    // the moment the user interacts with a new word.
+    if (!article) return;
+    
+    // IMMEDIATE STOP: Stop any existing audio
     stopAudio();
 
     // Generate a unique ID for this specific request interaction.
-    // This allows us to cancel previous requests (like the first click of a double-click)
-    // to prevent race conditions and overlapping audio loops.
     currentRequestIdRef.current += 1;
     const requestId = currentRequestIdRef.current;
     
     setLoadingState(LoadingState.TRANSLATING);
-    setCurrentDefinition(null); // Clear previous while loading
+    setCurrentDefinition(null); 
     
     try {
-      // Pass targetLang to determine whether to fetch English or Chinese
-      const definition = await translateWordInContext(word, context, targetLang, showDetailed);
+      const definition = await translateWordInContext(word, context, article.language, targetLang, showDetailed);
       
       // Check if a new request has started since we began. 
-      // If so, abort this one to prevent stale UI updates.
       if (currentRequestIdRef.current !== requestId) return;
 
       setCurrentDefinition(definition);
       
-      setHistory(prev => {
-        // Avoid duplicates at the top of the list
-        const filtered = prev.filter(item => item.word.toLowerCase() !== definition.word.toLowerCase());
-        const newItem: HistoryItem = { ...definition, id: crypto.randomUUID(), timestamp: Date.now() };
-        return [newItem, ...filtered].slice(50); // Keep last 50
-      });
-
       // Handle Auto-Play logic: Only play if it's NOT a sentence selection
       if (!isSentence && autoPlayCount > 0) {
         (async () => {
           const speed = playbackSpeed;
           // Loop based on autoPlayCount
           for (let i = 0; i < autoPlayCount; i++) {
-            // Check if the user has clicked something else (or double-clicked) in the meantime
             if (currentRequestIdRef.current !== requestId) break;
             
             try {
-              await playPronunciation(definition.word, speed);
-              // Small delay between repetitions
+              // Play source language pronunciation
+              await playPronunciation(definition.word, article.language, speed);
               if (i < autoPlayCount - 1) await new Promise(resolve => setTimeout(resolve, 500));
             } catch (e) {
               console.warn("Auto-play interrupted or failed", e);
@@ -217,11 +206,9 @@ function App() {
       }
 
     } catch (error) {
-      // If error occurred but we moved on to another request, ignore the error
       if (currentRequestIdRef.current !== requestId) return;
       console.error("Translation failed", error);
     } finally {
-      // Only clear loading state if we are still the active request
       if (currentRequestIdRef.current === requestId) {
         setLoadingState(LoadingState.IDLE);
       }
@@ -296,10 +283,6 @@ function App() {
       }
     }
   };
-  
-  const toggleLanguage = () => {
-    setTargetLang(prev => prev === 'en' ? 'zh' : 'en');
-  };
 
   const getSpeedLabel = () => {
     if (playbackSpeed === 1.0) return 'Normal Speed';
@@ -319,32 +302,48 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col font-sans">
+    <div className="min-h-screen bg-gray-50 flex flex-col font-sans overflow-hidden">
       {/* Header */}
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-30">
-        <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between gap-2 overflow-x-auto no-scrollbar">
+      <header className="bg-white border-b border-gray-200 sticky top-0 z-30 flex-shrink-0">
+        <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between gap-4">
           <div className="flex items-center gap-2 flex-shrink-0">
-            <div className="w-8 h-8 bg-danish-red rounded-md flex items-center justify-center text-white font-bold font-serif text-xl">D</div>
-            <h1 className="text-xl font-bold tracking-tight text-gray-900 flex items-baseline">
-              <span className="hidden sm:inline">DanskReader</span>
-              <span className="sm:hidden">DR</span>
+            <div className="w-8 h-8 bg-danish-red rounded-md flex items-center justify-center text-white font-bold font-serif text-xl">P</div>
+            <h1 className="text-xl font-bold tracking-tight text-gray-900 hidden md:block">
+              PolyglotReader
             </h1>
           </div>
           
-          <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="flex items-center gap-2 flex-1 overflow-x-auto no-scrollbar justify-end">
+            
+            {/* Target Language Selector */}
+            <div className="flex items-center border border-gray-200 rounded-full px-2 bg-white flex-shrink-0">
+               <Languages size={14} className="text-gray-400 mr-1" />
+               <select 
+                 value={targetLang}
+                 onChange={(e) => setTargetLang(e.target.value as LanguageCode)}
+                 className="text-xs font-semibold text-gray-700 bg-transparent border-none focus:ring-0 py-1.5 pl-0 pr-6 cursor-pointer outline-none"
+               >
+                 {SUPPORTED_LANGUAGES.map(lang => (
+                   <option key={lang.code} value={lang.code}>{lang.flag} {lang.name}</option>
+                 ))}
+               </select>
+            </div>
+
+            <div className="h-6 w-px bg-gray-200 mx-1 flex-shrink-0"></div>
+
             {/* Manual Translate Button */}
              <button
-              onMouseDown={(e) => e.preventDefault()} // Prevent focus loss on click to keep selection active
+              onMouseDown={(e) => e.preventDefault()} 
               onClick={handleManualTranslate}
               className="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 transition-all whitespace-nowrap flex-shrink-0"
               title="Translate Selected Text"
             >
               <MessageSquareQuote size={14} />
-              <span>Translate Selection</span>
+              <span className="hidden sm:inline">Translate</span>
             </button>
 
             {/* Text Size Control */}
-            <div className="flex items-center border border-gray-200 rounded-full bg-white mr-1 flex-shrink-0">
+            <div className="flex items-center border border-gray-200 rounded-full bg-white flex-shrink-0">
               <button onClick={handleDecreaseTextSize} className="px-2 py-1.5 hover:bg-gray-50 text-gray-500 rounded-l-full">
                 <Minus size={14} />
               </button>
@@ -364,16 +363,15 @@ function App() {
                 readingTheme === 'dark' ? 'bg-gray-800 text-gray-200 border-gray-700' :
                 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
               }`}
-              title="Change Theme"
             >
               <Palette size={14} />
-              <span>{getThemeLabel()}</span>
+              <span className="hidden sm:inline">{getThemeLabel()}</span>
             </button>
 
-            {/* Auto Play Toggle (0, 1x, 2x, 3x) */}
+            {/* Auto Play Toggle */}
             <button
               onClick={cycleAutoPlay}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border whitespace-nowrap flex-shrink-0 ${
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border whitespace-nowrap flex-shrink-0 hidden sm:flex ${
                 autoPlayCount > 0
                   ? 'bg-blue-50 text-blue-600 border-blue-200 ring-1 ring-blue-200' 
                   : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
@@ -386,7 +384,7 @@ function App() {
             {/* Speed Toggle */}
             <button
               onClick={cyclePlaybackSpeed}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border whitespace-nowrap flex-shrink-0 ${
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border whitespace-nowrap flex-shrink-0 hidden sm:flex ${
                 playbackSpeed < 1.0
                   ? 'bg-amber-50 text-amber-700 border-amber-200 ring-1 ring-amber-200' 
                   : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
@@ -399,46 +397,33 @@ function App() {
             {/* Detailed Toggle */}
             <button
               onClick={() => setShowDetailed(!showDetailed)}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border whitespace-nowrap flex-shrink-0 ${
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border whitespace-nowrap flex-shrink-0 hidden lg:flex ${
                 showDetailed 
                   ? 'bg-purple-50 text-purple-600 border-purple-200 ring-1 ring-purple-200' 
                   : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
               }`}
             >
               <FileText size={14} />
-              <span>{showDetailed ? 'Detailed On' : 'Detailed Off'}</span>
+              <span>Detailed</span>
             </button>
             
             {/* Bookmarks Toggle */}
             <button
               onClick={() => setBookmarksEnabled(!bookmarksEnabled)}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border whitespace-nowrap flex-shrink-0 ${
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border whitespace-nowrap flex-shrink-0 hidden lg:flex ${
                 bookmarksEnabled
                   ? 'bg-teal-50 text-teal-600 border-teal-200 ring-1 ring-teal-200' 
                   : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
               }`}
             >
               <Bookmark size={14} fill={bookmarksEnabled ? "currentColor" : "none"}/>
-              <span>{bookmarksEnabled ? 'Bookmarks On' : 'Bookmarks Off'}</span>
-            </button>
-
-            {/* Language Toggle */}
-            <button
-              onClick={toggleLanguage}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border whitespace-nowrap flex-shrink-0 ${
-                targetLang === 'zh'
-                  ? 'bg-red-50 text-danish-red border-danish-red/30 ring-1 ring-danish-red/30' 
-                  : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
-              }`}
-            >
-              <Languages size={14} />
-              <span>{targetLang === 'en' ? 'English' : 'Chinese'}</span>
+              <span>Bookmarks</span>
             </button>
 
              {/* Fullscreen Toggle */}
              <button
               onClick={toggleFullscreen}
-              className="flex items-center justify-center p-2 rounded-full text-gray-500 hover:bg-gray-100 border border-gray-200 flex-shrink-0"
+              className="flex items-center justify-center p-2 rounded-full text-gray-500 hover:bg-gray-100 border border-gray-200 flex-shrink-0 hidden lg:flex"
               title={isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
             >
               {isFullscreen ? <Minimize size={16} /> : <Maximize size={16} />}
@@ -449,15 +434,16 @@ function App() {
               className="flex items-center gap-2 px-4 py-2 bg-gray-900 text-white rounded-full text-sm font-medium hover:bg-gray-800 transition-colors whitespace-nowrap flex-shrink-0"
             >
               <Sparkles size={16} />
-              <span>Library</span>
+              <span className="hidden sm:inline">Library</span>
             </button>
+
           </div>
         </div>
       </header>
 
       {/* Main Content */}
-      <div className="flex-1 max-w-7xl w-full mx-auto flex relative items-start">
-        <main className="flex-1 p-4 md:p-8 w-full min-w-0">
+      <div className="flex-1 max-w-7xl w-full mx-auto flex relative items-start overflow-hidden">
+        <main className="flex-1 p-4 md:p-8 w-full min-w-0 h-full overflow-y-auto custom-scrollbar">
           <ArticleReader 
             article={article}
             onWordSelect={handleWordSelect}
@@ -469,7 +455,6 @@ function App() {
             showDetailed={showDetailed}
             onSetBookmark={handleSetBookmark}
             textSize={textSize}
-            targetLang={targetLang}
             readingTheme={readingTheme}
             bookmarksEnabled={bookmarksEnabled}
           />

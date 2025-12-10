@@ -1,13 +1,13 @@
 import React, { useState, useRef } from 'react';
-import { X, Clipboard, ArrowLeft, BookOpen, Trash2, FileText, Camera, Upload, Loader2 } from 'lucide-react';
-import { Article } from '../types';
+import { X, Clipboard, ArrowLeft, BookOpen, Trash2, FileText, Camera, Upload, Loader2, Globe } from 'lucide-react';
+import { Article, LanguageCode, SUPPORTED_LANGUAGES } from '../types';
 import { transcribeImage } from '../services/geminiService';
 
 interface ArticleGeneratorModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onGenerate: (topic: string) => void;
-  onPaste: (title: string, content: string) => void;
+  onGenerate: (topic: string, language: LanguageCode) => void;
+  onPaste: (title: string, content: string, language: LanguageCode) => void;
   articleHistory: Article[];
   onSelectHistory: (article: Article) => void;
 }
@@ -15,13 +15,16 @@ interface ArticleGeneratorModalProps {
 const ArticleGeneratorModal: React.FC<ArticleGeneratorModalProps> = ({ 
   isOpen, 
   onClose, 
+  onGenerate,
   onPaste, 
   articleHistory,
   onSelectHistory
 }) => {
-  const [mode, setMode] = useState<'menu' | 'paste'>('menu');
+  const [mode, setMode] = useState<'menu' | 'paste' | 'generate'>('menu');
   const [pasteTitle, setPasteTitle] = useState('');
   const [pasteContent, setPasteContent] = useState('');
+  const [topic, setTopic] = useState('');
+  const [selectedLanguage, setSelectedLanguage] = useState<LanguageCode>('en');
   const [isTranscribing, setIsTranscribing] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -33,7 +36,14 @@ const ArticleGeneratorModal: React.FC<ArticleGeneratorModalProps> = ({
     e.preventDefault();
     if (!pasteContent.trim()) return;
     
-    onPaste(pasteTitle.trim() || 'My Article', pasteContent);
+    onPaste(pasteTitle.trim() || 'My Article', pasteContent, selectedLanguage);
+    resetForm();
+  };
+
+  const handleGenerateSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!topic.trim()) return;
+    onGenerate(topic, selectedLanguage);
     resetForm();
   };
 
@@ -44,6 +54,7 @@ const ArticleGeneratorModal: React.FC<ArticleGeneratorModalProps> = ({
   const resetForm = () => {
     setPasteTitle('');
     setPasteContent('');
+    setTopic('');
     setMode('menu');
     setIsTranscribing(false);
   };
@@ -79,7 +90,7 @@ const ArticleGeneratorModal: React.FC<ArticleGeneratorModalProps> = ({
     reader.onloadend = async () => {
       try {
         const base64String = (reader.result as string).split(',')[1];
-        const transcribedText = await transcribeImage(base64String, file.type);
+        const transcribedText = await transcribeImage(base64String, file.type, selectedLanguage);
         setPasteContent(transcribedText);
       } catch (error) {
         console.error(error);
@@ -100,13 +111,13 @@ const ArticleGeneratorModal: React.FC<ArticleGeneratorModalProps> = ({
         {/* Header */}
         <div className="flex justify-between items-center p-6 pb-4 border-b border-gray-100 flex-shrink-0">
           <div className="flex items-center gap-2">
-            {mode === 'paste' && (
+            {mode !== 'menu' && (
               <button onClick={handleBack} className="mr-2 text-gray-400 hover:text-gray-600">
                 <ArrowLeft size={20} />
               </button>
             )}
             <h2 className="text-xl font-bold text-gray-900">
-              {mode === 'paste' ? 'Import Content' : 'Your Library'}
+              {mode === 'paste' ? 'Import Content' : mode === 'generate' ? 'Generate Article' : 'Your Library'}
             </h2>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
@@ -120,6 +131,20 @@ const ArticleGeneratorModal: React.FC<ArticleGeneratorModalProps> = ({
             <div className="space-y-4">
               
               <div className="grid grid-cols-1 gap-3">
+                 {/* Generate New */}
+                <button
+                  onClick={() => setMode('generate')}
+                  className="w-full flex items-center gap-4 p-4 rounded-xl hover:bg-orange-50 border border-gray-100 hover:border-orange-200 transition-all text-left group"
+                >
+                  <div className="w-10 h-10 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center group-hover:bg-orange-600 group-hover:text-white transition-colors">
+                    <Globe size={20} />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-gray-900">Generate Article</h3>
+                    <p className="text-xs text-gray-500">AI-written news topics</p>
+                  </div>
+                </button>
+
                 {/* Paste Option */}
                 <button
                   onClick={() => setMode('paste')}
@@ -188,27 +213,80 @@ const ArticleGeneratorModal: React.FC<ArticleGeneratorModalProps> = ({
                     </div>
                   ) : (
                     <div className="space-y-2">
-                      {articleHistory.map((article) => (
+                      {articleHistory.map((article) => {
+                         const langFlag = SUPPORTED_LANGUAGES.find(l => l.code === article.language)?.flag || '';
+                         return (
                         <button
                           key={article.id}
                           onClick={() => onSelectHistory(article)}
                           className="w-full flex items-start gap-3 p-3 rounded-lg hover:bg-gray-50 border border-transparent hover:border-gray-200 transition-all text-left group"
                         >
                           <div className="mt-1 w-8 h-8 rounded-full bg-gray-100 text-gray-500 flex items-center justify-center flex-shrink-0 group-hover:bg-danish-red group-hover:text-white transition-colors">
-                            <BookOpen size={16} />
+                            {langFlag ? <span className="text-sm">{langFlag}</span> : <BookOpen size={16} />}
                           </div>
                           <div className="flex-1 min-w-0">
                             <h3 className="font-medium text-gray-900 truncate">{article.title}</h3>
                             <p className="text-xs text-gray-500 line-clamp-2">{article.content.substring(0, 100)}...</p>
                           </div>
                         </button>
-                      ))}
+                      )})}
                     </div>
                   )}
               </div>
             </div>
+          ) : mode === 'generate' ? (
+             <form onSubmit={handleGenerateSubmit} className="flex flex-col h-full space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Language</label>
+                  <select 
+                     value={selectedLanguage}
+                     onChange={(e) => setSelectedLanguage(e.target.value as LanguageCode)}
+                     className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                  >
+                     {SUPPORTED_LANGUAGES.map(lang => (
+                        <option key={lang.code} value={lang.code}>{lang.flag} {lang.name}</option>
+                     ))}
+                  </select>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Topic</label>
+                  <input 
+                    type="text" 
+                    value={topic}
+                    onChange={(e) => setTopic(e.target.value)}
+                    placeholder="e.g., Space Exploration, Local Politics"
+                    className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                    autoFocus
+                  />
+                  <p className="text-xs text-gray-500 mt-1">AI will generate a B1/B2 level article on this topic.</p>
+                </div>
+
+                <div className="pt-2">
+                  <button 
+                    type="submit"
+                    className="w-full py-3 bg-orange-600 text-white font-bold rounded-xl hover:bg-orange-700 transition-colors shadow-sm"
+                  >
+                    Generate Article
+                  </button>
+                </div>
+             </form>
           ) : (
             <form onSubmit={handlePasteSubmit} className="flex flex-col h-full space-y-4">
+               <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Language</label>
+                  <select 
+                     value={selectedLanguage}
+                     onChange={(e) => setSelectedLanguage(e.target.value as LanguageCode)}
+                     className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                     disabled={isTranscribing}
+                  >
+                     {SUPPORTED_LANGUAGES.map(lang => (
+                        <option key={lang.code} value={lang.code}>{lang.flag} {lang.name}</option>
+                     ))}
+                  </select>
+                </div>
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Title (Optional)</label>
                 <input 
@@ -221,11 +299,11 @@ const ArticleGeneratorModal: React.FC<ArticleGeneratorModalProps> = ({
                 />
               </div>
               <div className="flex-1 min-h-[200px] relative">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Content (Danish)</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Content</label>
                 <textarea 
                   value={pasteContent}
                   onChange={(e) => setPasteContent(e.target.value)}
-                  placeholder="Paste your Danish text here..."
+                  placeholder="Paste your text here..."
                   className="w-full h-full min-h-[200px] px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none font-serif text-base"
                   required
                   disabled={isTranscribing}
@@ -250,7 +328,7 @@ const ArticleGeneratorModal: React.FC<ArticleGeneratorModalProps> = ({
         </div>
 
         <div className="p-4 bg-gray-50 text-center text-xs text-gray-400 border-t border-gray-100 flex-shrink-0">
-           Dansk Reader
+           Polyglot Reader
         </div>
       </div>
     </div>

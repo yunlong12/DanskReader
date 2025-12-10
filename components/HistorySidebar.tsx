@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { HistoryItem, WordDefinition } from '../types';
+import { HistoryItem, WordDefinition, SUPPORTED_LANGUAGES } from '../types';
 import { BookMarked, Volume2, Loader2, Languages } from 'lucide-react';
 import { playPronunciation } from '../services/geminiService';
 
@@ -18,13 +18,16 @@ const HistorySidebar: React.FC<HistorySidebarProps> = ({ currentDefinition, hist
     
     setIsPlaying(true);
     try {
-      await playPronunciation(currentDefinition.word, playbackSpeed);
+      await playPronunciation(currentDefinition.word, currentDefinition.sourceLanguage, playbackSpeed);
     } catch (error) {
       console.error("Failed to play audio", error);
     } finally {
       setIsPlaying(false);
     }
   };
+
+  // Helper to get flag from language code
+  const getFlag = (code: string) => SUPPORTED_LANGUAGES.find(l => l.code === code)?.flag || code;
   
   return (
     <div className="w-full lg:w-96 bg-gray-50 border-l border-gray-200 flex flex-col h-full">
@@ -65,29 +68,20 @@ const HistorySidebar: React.FC<HistorySidebarProps> = ({ currentDefinition, hist
               <span className="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded-md font-medium">
                 {currentDefinition.partOfSpeech}
               </span>
+              <span className="px-2 py-0.5 bg-gray-50 text-gray-400 text-xs rounded-md border border-gray-100">
+                {getFlag(currentDefinition.sourceLanguage)} → {getFlag(currentDefinition.targetLanguage)}
+              </span>
             </div>
 
             <div className="mb-4 space-y-2">
               <div className="flex items-start gap-2">
-                {currentDefinition.chineseTranslation && (
-                   <span className="text-xs font-bold text-gray-400 mt-1 w-6 flex-shrink-0">EN</span>
-                )}
                 <p className="text-lg font-medium text-gray-900 leading-snug">{currentDefinition.translation}</p>
               </div>
-              
-              {currentDefinition.chineseTranslation && (
-                <div className="flex items-start gap-2 pt-2 border-t border-gray-50">
-                  <span className="text-xs font-bold text-gray-400 mt-1 w-6 flex-shrink-0">CN</span>
-                  <p className="text-base font-medium text-gray-700 leading-snug">
-                    {currentDefinition.chineseTranslation}
-                  </p>
-                </div>
-              )}
             </div>
 
             <div className="bg-gray-50 p-3 rounded-lg border border-gray-100">
-              <p className="text-xs text-gray-400 font-bold uppercase mb-1">Example</p>
-              <p className="text-sm text-gray-700 italic">"{currentDefinition.exampleSentence}"</p>
+              <p className="text-xs text-gray-400 font-bold uppercase mb-1">Context</p>
+              <p className="text-sm text-gray-700 italic">"{currentDefinition.contextParams}"</p>
             </div>
           </div>
         ) : (
@@ -110,13 +104,17 @@ const HistorySidebar: React.FC<HistorySidebarProps> = ({ currentDefinition, hist
                 <div className="flex justify-between items-start">
                   <div className="w-full">
                     <div className="flex justify-between w-full mb-1">
-                      <span className="font-bold text-gray-800 line-clamp-1 mr-2">{item.word}</span>
+                      <div className="flex items-center gap-2">
+                         <span className="font-bold text-gray-800 line-clamp-1">{item.word}</span>
+                      </div>
                       <span className="text-xs text-gray-400 whitespace-nowrap">{new Date(item.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
                     </div>
                     <div className="text-gray-600 text-sm line-clamp-2">{item.translation}</div>
-                    {item.chineseTranslation && (
-                        <div className="text-gray-500 text-xs mt-0.5 line-clamp-1">🇨🇳 {item.chineseTranslation}</div>
-                    )}
+                    <div className="text-gray-400 text-xs mt-1 flex gap-1 items-center">
+                        <span>{getFlag(item.sourceLanguage)}</span>
+                        <span>→</span>
+                        <span>{getFlag(item.targetLanguage)}</span>
+                    </div>
                   </div>
                 </div>
               </div>

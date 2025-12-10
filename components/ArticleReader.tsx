@@ -1,6 +1,7 @@
 import React, { useCallback, useState, useEffect, useRef } from 'react';
 import { Article, WordDefinition } from '../types';
-import { BookOpen, RefreshCw, Loader2, Bookmark, GripHorizontal, X } from 'lucide-react';
+import { BookOpen, RefreshCw, Loader2, Bookmark, GripHorizontal, X, Volume2 } from 'lucide-react';
+import { playPronunciation } from '../services/geminiService';
 
 interface ArticleReaderProps {
   article: Article | null;
@@ -13,7 +14,6 @@ interface ArticleReaderProps {
   showDetailed: boolean;
   onSetBookmark: (index: number) => void;
   textSize: number;
-  targetLang: 'en' | 'zh';
   readingTheme: 'light' | 'sepia' | 'dark';
   bookmarksEnabled: boolean;
 }
@@ -29,13 +29,13 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
   showDetailed,
   onSetBookmark,
   textSize,
-  targetLang,
   readingTheme,
   bookmarksEnabled
 }) => {
   const [selectionRect, setSelectionRect] = useState<DOMRect | null>(null);
   // Track window width to ensure popover calculations are accurate on resize/rotation
   const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 0);
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   
   // Dragging state
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
@@ -74,9 +74,6 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
   }, [article?.id, article?.bookmarkParagraphIndex]);
 
   // Force update selection rect when translation starts
-  // This ensures that if the manual 'Translate Selection' button is used,
-  // we capture the current selection position even if handleMouseUp missed it
-  // (e.g. user dragged outside the container) or it became stale.
   useEffect(() => {
     if (isTranslating) {
       const selection = window.getSelection();
@@ -100,9 +97,22 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
     }
   }, [isTranslating]);
 
-  // Helper to check if a character is part of a Danish word
+  // Helper to check if a character is part of a word (Latin, Cyrillic, Greek, etc.)
+  // For CJK, we use a different strategy, but this helper is for expansion logic.
   const isWordChar = (char: string) => {
-    return /[a-zA-ZæøåÆØÅ0-9\-]/.test(char);
+    return /[a-zA-Z0-9\-\u00C0-\u024F\u1E00-\u1EFF\u0400-\u04FF\u0370-\u03FF\uAC00-\uD7AF]/.test(char);
+  };
+  
+  const handlePlayAudio = async (text: string, lang: any) => {
+    if (isPlayingAudio) return;
+    setIsPlayingAudio(true);
+    try {
+      await playPronunciation(text, lang, 1.0);
+    } catch (error) {
+      console.error("Audio playback failed", error);
+    } finally {
+      setIsPlayingAudio(false);
+    }
   };
 
   const handleMouseUp = useCallback(() => {
@@ -120,9 +130,6 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
         return;
       }
 
-      // CRITICAL: Calculate and store the rect of the selected text.
-      // This ensures that when the user clicks "Translate Selection" in the header,
-      // the popover knows where to appear.
       const range = selection.getRangeAt(0);
       const rect = range.getBoundingClientRect();
       setSelectionRect(rect);
@@ -140,6 +147,7 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
   const handleClick = useCallback((e: React.MouseEvent) => {
     // Check if we just processed a selection drag, if so, ignore this click
     if (isSelectingRef.current) return;
+    if (!article) return;
 
     // If user has actively selected text (dragged), don't trigger single word lookup
     const selection = window.getSelection();
@@ -147,11 +155,10 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
       return;
     }
 
-    // Stop native behavior (like "Touch to Search" or cursor placement) for single clicks
+    // Stop native behavior
     e.preventDefault();
 
-    // Use Caret Range to find word at coordinates (Coordinate-based lookup)
-    // This bypasses the need for "selection" and thus avoids native menus
+    // Use Caret Range to find word at coordinates
     const x = e.clientX;
     const y = e.clientY;
 
@@ -177,31 +184,54 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
 
     // Ensure we hit a text node
     if (!textNode || textNode.nodeType !== Node.TEXT_NODE) {
-      // Clicked outside text (e.g. whitespace between paragraphs)
       setSelectionRect(null);
       onClearSelection();
       return;
     }
 
     const text = textNode.textContent || "";
-    
-    // Expand from offset to find the full word
-    // Look backwards
+    let clickedWord = "";
     let start = offset;
-    while (start > 0 && isWordChar(text[start - 1])) {
-        start--;
-    }
-    
-    // Look forwards
     let end = offset;
-    while (end < text.length && isWordChar(text[end])) {
-        end++;
-    }
 
-    const clickedWord = text.substring(start, end).trim();
+    // Strategy 1: Intl.Segmenter for languages that support it reliably (especially CJK)
+    // If the browser supports Segmenter and we are in a language that typically needs it (zh, ja)
+    const needsSegmentation = ['zh', 'ja', 'ko'].includes(article.language);
+    
+    if (needsSegmentation && typeof Intl !== 'undefined' && (Intl as any).Segmenter) {
+        const segmenter = new (Intl as any).Segmenter(article.language, { granularity: 'word' });
+        const segments = segmenter.segment(text);
+        
+        // Find the segment that contains the offset
+        for (const segment of segments) {
+            if (offset >= segment.index && offset < segment.index + segment.segment.length) {
+                if (segment.isWordLike) {
+                    start = segment.index;
+                    end = segment.index + segment.segment.length;
+                    clickedWord = segment.segment;
+                }
+                break;
+            }
+        }
+    } 
+    
+    // Strategy 2: Fallback Regex expansion (Latin, or if Segmenter unavailable/failed)
+    if (!clickedWord) {
+         // Look backwards
+        while (start > 0 && isWordChar(text[start - 1])) {
+            start--;
+        }
+        
+        // Look forwards
+        while (end < text.length && isWordChar(text[end])) {
+            end++;
+        }
+        clickedWord = text.substring(start, end).trim();
+    }
 
     // Filter out clicks on whitespace or purely punctuation
-    if (!clickedWord || !/[a-zA-ZæøåÆØÅ0-9]/.test(clickedWord)) {
+    // Updated punctuation check to include CJK punctuation ranges
+    if (!clickedWord || /^[\s\u2000-\u206F\u2E00-\u2E7F\\'!"#$%&()*+,\-.\/:;<=>?@\[\]^`{|}~.。，、？；：‘“’”【】（）…—]+$/.test(clickedWord)) {
       setSelectionRect(null);
       onClearSelection();
       return;
@@ -226,7 +256,7 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
     // Pass false for isSentence because this was a single click
     onWordSelect(clickedWord, context, false);
 
-  }, [onWordSelect, onClearSelection]);
+  }, [onWordSelect, onClearSelection, article]);
 
   // --- Drag Handling Logic ---
   const handlePointerDown = (e: React.PointerEvent) => {
@@ -365,14 +395,8 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
         transition: 'opacity 0.2s'
     };
 
-    // Determine which translation to show based on targetLang
-    const displayTranslation = targetLang === 'zh' 
-      ? currentDefinition?.chineseTranslation 
-      : currentDefinition?.translation;
-      
-    const displayDetailed = targetLang === 'zh'
-      ? currentDefinition?.detailedChineseExplanation
-      : currentDefinition?.detailedExplanation;
+    const displayTranslation = currentDefinition?.translation;
+    const displayDetailed = currentDefinition?.detailedExplanation;
 
     return (
         <div 
@@ -421,10 +445,20 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
                     <h3 className="font-bold text-danish-red text-xl leading-tight break-words pr-2">
                       {currentDefinition.word}
                     </h3>
+                    <button 
+                      onClick={() => handlePlayAudio(currentDefinition.word, currentDefinition.sourceLanguage)}
+                      disabled={isPlayingAudio}
+                      className="text-gray-400 hover:text-danish-red transition-colors p-1 rounded-full hover:bg-red-50 disabled:opacity-50 flex-shrink-0 mt-1"
+                      title="Listen"
+                    >
+                      {isPlayingAudio ? <Loader2 size={18} className="animate-spin" /> : <Volume2 size={18} />}
+                    </button>
                   </div>
                   
                   <div className="flex flex-wrap items-center gap-2 mb-3 mt-1">
-                    <span className="text-sm text-gray-500 italic font-serif">/{currentDefinition.pronunciation}/</span>
+                    {currentDefinition.pronunciation && (
+                      <span className="text-sm text-gray-500 italic font-serif">/{currentDefinition.pronunciation}/</span>
+                    )}
                     <span className="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded-md font-medium">
                       {currentDefinition.partOfSpeech}
                     </span>
@@ -479,9 +513,14 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
         {/* Article Header */}
         <div className={`p-8 pb-4 border-b ${themeStyles.header}`}>
           <div className="flex justify-between items-start mb-4">
-            <span className="px-3 py-1 bg-gray-100/50 text-gray-600 text-xs font-bold uppercase tracking-wider rounded-full">
-              {article.topic}
-            </span>
+            <div className="flex gap-2">
+               <span className="px-3 py-1 bg-gray-100/50 text-gray-600 text-xs font-bold uppercase tracking-wider rounded-full">
+                {article.topic}
+               </span>
+               <span className="px-3 py-1 bg-blue-50 text-blue-600 text-xs font-bold uppercase tracking-wider rounded-full">
+                {article.language.toUpperCase()}
+               </span>
+            </div>
             <button 
               onClick={(e) => {
                 e.stopPropagation();
