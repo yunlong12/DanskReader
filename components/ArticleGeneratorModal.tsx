@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { X, Clipboard, ArrowLeft, BookOpen, FileText, Camera, Loader2, AlertTriangle } from 'lucide-react';
+import { X, Clipboard, ArrowLeft, BookOpen, FileText, Camera, Loader2, AlertTriangle, ChevronDown } from 'lucide-react';
 import { Article, LanguageCode, SUPPORTED_LANGUAGES } from '../types';
 import { transcribeImage, detectLanguage } from '../services/geminiService';
 
@@ -21,6 +21,7 @@ const ArticleGeneratorModal: React.FC<ArticleGeneratorModalProps> = ({
   const [mode, setMode] = useState<'menu' | 'paste'>('menu');
   const [pasteTitle, setPasteTitle] = useState('');
   const [pasteContent, setPasteContent] = useState('');
+  const [selectedLang, setSelectedLang] = useState<LanguageCode | 'auto'>('auto');
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('');
   const [unsupportedLang, setUnsupportedLang] = useState<{name: string} | null>(null);
@@ -33,6 +34,13 @@ const ArticleGeneratorModal: React.FC<ArticleGeneratorModalProps> = ({
   const handlePasteSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!pasteContent.trim()) return;
+
+    // If manual language is selected, bypass detection
+    if (selectedLang !== 'auto') {
+         onPaste(pasteTitle.trim() || 'My Article', pasteContent, selectedLang);
+         resetForm();
+         return;
+    }
 
     setIsLoading(true);
     setLoadingMessage('Detecting language...');
@@ -60,6 +68,7 @@ const ArticleGeneratorModal: React.FC<ArticleGeneratorModalProps> = ({
   const resetForm = () => {
     setPasteTitle('');
     setPasteContent('');
+    setSelectedLang('auto');
     setMode('menu');
     setIsLoading(false);
     setUnsupportedLang(null);
@@ -102,10 +111,8 @@ const ArticleGeneratorModal: React.FC<ArticleGeneratorModalProps> = ({
         const transcribedText = await transcribeImage(base64String, file.type);
         setPasteContent(transcribedText);
         setLoadingMessage('Detecting language...');
-
-        // 2. Detect (Optional: we can do this on submit, but doing it here gives immediate feedback)
-        // For now, let's just show the text and let the user hit "Read Article" which triggers detection.
-        // This allows user to fix OCR errors before detection.
+        
+        // We stay in "paste" mode, user can now verify text and hit submit (which triggers detection)
         
       } catch (error) {
         console.error(error);
@@ -251,9 +258,22 @@ const ArticleGeneratorModal: React.FC<ArticleGeneratorModalProps> = ({
                   />
                 </div>
                 <div className="flex-1 min-h-[200px] relative">
-                  <div className="flex justify-between mb-1">
+                  <div className="flex justify-between mb-1 items-end">
                      <label className="block text-sm font-medium text-gray-700">Content</label>
-                     <span className="text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full font-medium">Auto-Detect Language</span>
+                     <div className="relative">
+                       <select
+                         value={selectedLang}
+                         onChange={(e) => setSelectedLang(e.target.value as LanguageCode | 'auto')}
+                         className="appearance-none pl-3 pr-8 py-1 bg-blue-50 border border-blue-100 text-blue-700 text-xs font-bold rounded-full cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 hover:bg-blue-100 transition-colors"
+                         disabled={isLoading}
+                       >
+                         <option value="auto">✨ Auto-Detect</option>
+                         {SUPPORTED_LANGUAGES.map(lang => (
+                           <option key={lang.code} value={lang.code}>{lang.flag} {lang.name}</option>
+                         ))}
+                       </select>
+                       <ChevronDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-blue-700 pointer-events-none" />
+                     </div>
                   </div>
                   <textarea 
                     value={pasteContent}
