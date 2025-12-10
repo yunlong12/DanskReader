@@ -16,6 +16,7 @@ interface ArticleReaderProps {
   textSize: number;
   readingTheme: 'light' | 'sepia' | 'dark';
   bookmarksEnabled: boolean;
+  playbackSpeed: number;
 }
 
 // Helper interface for positioning
@@ -38,7 +39,8 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
   onSetBookmark,
   textSize,
   readingTheme,
-  bookmarksEnabled
+  bookmarksEnabled,
+  playbackSpeed
 }) => {
   const [popoverPos, setPopoverPos] = useState<PopoverPosition | null>(null);
   
@@ -68,21 +70,8 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
     setDragOffset({ x: 0, y: 0 });
   }, [currentDefinition?.word, isTranslating]);
 
-  // Scroll to bookmark when article changes
-  useEffect(() => {
-    if (article && typeof article.bookmarkParagraphIndex === 'number') {
-      const index = article.bookmarkParagraphIndex;
-      const el = paragraphRefs.current[index];
-      if (el) {
-        setTimeout(() => {
-            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }, 100);
-      }
-    }
-  }, [article?.id, article?.bookmarkParagraphIndex]);
-
   // Helper to update popover position state from a DOMRect range
-  const updatePopoverPosition = (rangeRect: DOMRect) => {
+  const updatePopoverPosition = useCallback((rangeRect: DOMRect) => {
     if (!containerRef.current) return;
     
     const containerRect = containerRef.current.getBoundingClientRect();
@@ -96,7 +85,46 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
       width: rangeRect.width,
       height: rangeRect.height
     });
-  };
+  }, []);
+
+  // Ensure the popover is anchored to the current text selection (useful on mobile when tapping the translate button)
+  useEffect(() => {
+    if (popoverPos) return;
+    if (!isTranslating && !currentDefinition) return;
+    if (typeof window === 'undefined') return;
+
+    const selection = window.getSelection();
+    const containerEl = containerRef.current;
+    if (
+      !selection ||
+      selection.isCollapsed ||
+      selection.rangeCount === 0 ||
+      !containerEl ||
+      !selection.anchorNode ||
+      !containerEl.contains(selection.anchorNode)
+    ) {
+      return;
+    }
+
+    const range = selection.getRangeAt(0);
+    const rect = range.getBoundingClientRect();
+    if (rect.width === 0 && rect.height === 0) return;
+
+    updatePopoverPosition(rect);
+  }, [isTranslating, currentDefinition, popoverPos, updatePopoverPosition]);
+
+  // Scroll to bookmark when article changes
+  useEffect(() => {
+    if (article && typeof article.bookmarkParagraphIndex === 'number') {
+      const index = article.bookmarkParagraphIndex;
+      const el = paragraphRefs.current[index];
+      if (el) {
+        setTimeout(() => {
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 100);
+      }
+    }
+  }, [article?.id, article?.bookmarkParagraphIndex]);
 
   // Helper to check if a character is part of a word (Latin, Cyrillic, Greek, etc.)
   const isWordChar = (char: string) => {
@@ -107,7 +135,7 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
     if (isPlayingAudio) return;
     setIsPlayingAudio(true);
     try {
-      await playPronunciation(text, lang, 1.0);
+      await playPronunciation(text, lang, playbackSpeed);
     } catch (error) {
       console.error("Audio playback failed", error);
     } finally {
@@ -116,17 +144,13 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
   };
 
   const handleMouseUp = useCallback(() => {
-    // Handle DRAG selections (sentences/phrases)
+    // Handle DRAG selections (sentences/phrases) - Fallback logic for Desktop
     setTimeout(() => {
       const selection = window.getSelection();
+      const selectedText = selection ? selection.toString().trim() : "";
       
       // If selection is collapsed (empty), it's a click, not a drag. Ignore it here.
-      if (!selection || selection.isCollapsed || selection.rangeCount === 0) {
-        return;
-      }
-
-      const selectedText = selection.toString().trim();
-      if (!selectedText) {
+      if (!selection || selection.isCollapsed || selection.rangeCount === 0 || !selectedText) {
         return;
       }
 
@@ -139,7 +163,7 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
       setTimeout(() => { isSelectingRef.current = false; }, 500);
       
     }, 10);
-  }, []);
+  }, [updatePopoverPosition]);
 
   const handleClick = useCallback((e: React.MouseEvent) => {
     // Check if we just processed a selection drag, if so, ignore this click
@@ -250,7 +274,7 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
     updatePopoverPosition(rect);
     onWordSelect(clickedWord, context, false);
 
-  }, [onWordSelect, onClearSelection, article]);
+  }, [onWordSelect, onClearSelection, article, updatePopoverPosition]);
 
   // --- Drag Handling Logic ---
   const handlePointerDown = (e: React.PointerEvent) => {

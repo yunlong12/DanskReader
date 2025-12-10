@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { translateWordInContext, playPronunciation, stopAudio } from './services/geminiService';
 import { Article, WordDefinition, HistoryItem, LoadingState, LanguageCode, SUPPORTED_LANGUAGES } from './types';
 import ArticleReader from './components/ArticleReader';
@@ -56,6 +56,15 @@ function App() {
   
   // Ref to track the current request ID to prevent overlapping loops/race conditions
   const currentRequestIdRef = useRef<number>(0);
+  // Track touch-triggered manual translate to avoid duplicate clicks
+  const manualTranslateTouchRef = useRef(false);
+  // Allow wheel-to-horizontal scroll for the controls bar
+  const handleControlsWheel = (e: React.WheelEvent<HTMLDivElement>) => {
+    if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+      e.preventDefault();
+      e.currentTarget.scrollLeft += e.deltaY;
+    }
+  };
   
   // Article History State
   const [articleHistory, setArticleHistory] = useState<Article[]>(() => {
@@ -143,7 +152,7 @@ function App() {
   const handleClearSelection = () => {
     setCurrentDefinition(null);
   };
-
+  
   const handleWordSelect = async (word: string, context: string, isSentence: boolean = false) => {
     if (!article) return;
     
@@ -196,21 +205,38 @@ function App() {
   };
 
   const handleManualTranslate = () => {
+    // Try to get text from active selection
     const selection = window.getSelection();
-    if (!selection || selection.isCollapsed) {
+    let text = "";
+    let context = "";
+
+    if (selection && !selection.isCollapsed) {
+        text = selection.toString().trim();
+        if (selection.anchorNode && selection.anchorNode.parentElement) {
+            context = selection.anchorNode.parentElement.innerText;
+        }
+    }
+    
+    if (!text) {
        alert("Please select some text first.");
        return;
     }
-    const text = selection.toString().trim();
-    if (text) {
-       // Attempt to get context from parent element
-       let context = text;
-       if (selection.anchorNode && selection.anchorNode.parentElement) {
-          context = selection.anchorNode.parentElement.innerText;
-       }
-       // Treat as sentence to avoid audio auto-play
-       handleWordSelect(text, context, true);
-    }
+    
+    // Treat as sentence to avoid audio auto-play
+    handleWordSelect(text, context, true);
+  };
+
+  const handleManualTranslateTouch = (e: React.TouchEvent) => {
+    e.preventDefault();
+    manualTranslateTouchRef.current = true;
+    handleManualTranslate();
+    // Reset flag after a short delay so synthesized click events don't double-trigger
+    setTimeout(() => { manualTranslateTouchRef.current = false; }, 400);
+  };
+
+  const handleManualTranslateClick = () => {
+    if (manualTranslateTouchRef.current) return;
+    handleManualTranslate();
   };
 
   const cyclePlaybackSpeed = () => {
@@ -294,11 +320,14 @@ function App() {
             </h1>
           </div>
           
-          <div className="flex items-center gap-2 flex-1 overflow-x-auto no-scrollbar justify-start md:justify-end pr-2 md:pr-0">
+          <div 
+            className="flex items-center gap-2 flex-1 overflow-x-auto justify-start md:justify-end pr-2 md:pr-0"
+            onWheel={handleControlsWheel}
+          >
             
              {/* Fullscreen Toggle */}
              <button
-              onClick={toggleFullscreen}
+             onClick={toggleFullscreen}
               className="flex items-center justify-center p-2 rounded-full text-gray-500 hover:bg-gray-100 border border-gray-200 flex-shrink-0"
               title={isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
             >
@@ -307,8 +336,10 @@ function App() {
 
             {/* Manual Translate Button */}
              <button
-              onMouseDown={(e) => e.preventDefault()} 
-              onClick={handleManualTranslate}
+              onMouseDown={(e) => e.preventDefault()}
+              onTouchStart={(e) => e.preventDefault()}
+              onTouchEnd={handleManualTranslateTouch}
+              onClick={handleManualTranslateClick}
               className="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold bg-white text-gray-700 border border-gray-200 hover:bg-gray-50 transition-all whitespace-nowrap flex-shrink-0"
               title="Translate Selected Text"
             >
@@ -438,6 +469,7 @@ function App() {
             textSize={textSize}
             readingTheme={readingTheme}
             bookmarksEnabled={bookmarksEnabled}
+            playbackSpeed={playbackSpeed}
           />
         </main>
       </div>
