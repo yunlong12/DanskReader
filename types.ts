@@ -9,7 +9,7 @@ export interface Language {
 
 export const SUPPORTED_LANGUAGES: Language[] = [
   { code: 'en', name: 'English', flag: '🇬🇧', voice: 'en-US' },
-  { code: 'zh', name: 'Mandarin', flag: '🇨🇳', voice: 'zh-CN' },
+  { code: 'zh', name: 'Chinese(Simplified)', flag: '🇨🇳', voice: 'zh-CN' },
   { code: 'es', name: 'Spanish', flag: '🇪🇸', voice: 'es-ES' },
   { code: 'fr', name: 'French', flag: '🇫🇷', voice: 'fr-FR' },
   { code: 'de', name: 'German', flag: '🇩🇪', voice: 'de-DE' },
