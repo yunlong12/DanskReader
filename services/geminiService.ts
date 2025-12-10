@@ -208,14 +208,9 @@ export const stopAudio = () => {
     currentAudio = null;
   }
   
-  // 2. Stop Web Speech API if speaking
-  if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-    window.speechSynthesis.cancel();
-  }
-
-  // 3. Resolve any pending audio promise to unblock loops/awaiters
+  // 2. Resolve any pending audio promise to unblock loops/awaiters
   if (currentResolve) {
-    currentResolve = null;
+    currentResolve();
     currentResolve = null;
   }
 };
@@ -265,51 +260,21 @@ export const playPronunciation = async (text: string, languageCode: LanguageCode
 
     audio.onerror = (e) => {
       if (!hasResolved) {
-        // Fallback to Web Speech API (Browser Native)
-        if ('speechSynthesis' in window) {
-           const utterance = new SpeechSynthesisUtterance(safeText);
-           utterance.lang = voiceCode;
-           utterance.rate = speed;
-           
-           // Attempt to find a matching voice for better quality
-           const voices = window.speechSynthesis.getVoices();
-           const preferredVoice = voices.find(v => v.lang.replace('_', '-').toLowerCase() === voiceCode.toLowerCase());
-           const fallbackVoice = voices.find(v => v.lang.toLowerCase().startsWith(googleTlCode));
-           
-           if (preferredVoice || fallbackVoice) {
-             utterance.voice = preferredVoice || fallbackVoice || null;
-           }
-
-           utterance.onend = finalize;
-           utterance.onerror = (err) => {
-             console.error("Web Speech API failed", err);
-             // Even if it fails, we resolve or reject. Here we reject if both fail.
-             if (!hasResolved) {
-                hasResolved = true;
-                if (currentResolve === resolve) currentResolve = null;
-                reject(err);
-             }
-           };
-           
-           // Note: window.speechSynthesis.speak() queues utterances. 
-           // stopAudio() calls cancel() which clears the queue.
-           window.speechSynthesis.speak(utterance);
-        } else {
-           if (!hasResolved) {
-               hasResolved = true;
-               if (currentResolve === resolve) currentResolve = null;
-               reject(new Error("No TTS available"));
-           }
-        }
+         hasResolved = true;
+         if (currentResolve === resolve) currentResolve = null;
+         if (currentAudio === audio) currentAudio = null;
+         console.error("Google TTS failed", e);
+         reject(new Error("Audio playback failed"));
       }
     };
 
     audio.play().catch(error => {
-      // If play() fails (e.g. autoplay policy), trigger error handler to try fallback
-      console.warn("Audio play failed, attempting fallback", error);
+      console.warn("Audio play failed", error);
       if (!hasResolved) {
-        // Dispatch error manually to trigger fallback logic
-        audio.dispatchEvent(new Event('error'));
+        hasResolved = true;
+        if (currentResolve === resolve) currentResolve = null;
+        if (currentAudio === audio) currentAudio = null;
+        reject(error);
       }
     });
   });

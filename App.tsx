@@ -181,6 +181,7 @@ function App() {
   };
 
   const handleClearSelection = () => {
+    stopAudio();
     setCurrentDefinition(null);
   };
   
