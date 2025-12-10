@@ -73,6 +73,33 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
     }
   }, [article?.id, article?.bookmarkParagraphIndex]);
 
+  // Force update selection rect when translation starts
+  // This ensures that if the manual 'Translate Selection' button is used,
+  // we capture the current selection position even if handleMouseUp missed it
+  // (e.g. user dragged outside the container) or it became stale.
+  useEffect(() => {
+    if (isTranslating) {
+      const selection = window.getSelection();
+      if (selection && !selection.isCollapsed && selection.rangeCount > 0) {
+        const range = selection.getRangeAt(0);
+        const rect = range.getBoundingClientRect();
+        
+        // Only update if significantly different to avoid render loops
+        setSelectionRect(prev => {
+            if (!prev) return rect;
+            
+            const isSame = 
+                Math.abs(prev.x - rect.x) < 2 &&
+                Math.abs(prev.y - rect.y) < 2 &&
+                Math.abs(prev.width - rect.width) < 2 &&
+                Math.abs(prev.height - rect.height) < 2;
+                
+            return isSame ? prev : rect;
+        });
+      }
+    }
+  }, [isTranslating]);
+
   // Helper to check if a character is part of a Danish word
   const isWordChar = (char: string) => {
     return /[a-zA-ZæøåÆØÅ0-9\-]/.test(char);
