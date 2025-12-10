@@ -97,9 +97,13 @@ const fetchGoogleTranslation = async (text: string, sourceLang: string, targetLa
     throw new Error(`Google Translate API failed: ${response.statusText}`);
   }
   const data = await response.json();
-  // The structure is typically [[["Translation", "Original", null, null, 1]], ...]
-  // We want the first part of the first sentence
-  return data?.[0]?.[0]?.[0] || "";
+  
+  // The structure is typically [[["Translation 1", "Original 1", ...], ["Translation 2", "Original 2", ...]], ...]
+  // We need to join all translated segments to get the full text.
+  if (data && data[0] && Array.isArray(data[0])) {
+      return data[0].map((segment: any) => segment[0]).join("");
+  }
+  return "";
 };
 
 export const translateWordInContext = async (
