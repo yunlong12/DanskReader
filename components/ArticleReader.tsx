@@ -276,25 +276,28 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
 
   }, [onWordSelect, onClearSelection, article, updatePopoverPosition]);
 
-  // --- Drag Handling Logic ---
+  // --- Drag Handling Logic (Pointer Capture) ---
   const handlePointerDown = (e: React.PointerEvent) => {
     // Only allow left click for drag
     if (e.button !== 0) return;
     
     e.preventDefault();
     e.stopPropagation();
+    
+    // Use Pointer Capture to ensure we keep receiving events even if cursor moves outside
+    (e.target as Element).setPointerCapture(e.pointerId);
+
     isDraggingRef.current = true;
     dragStartRef.current = { x: e.clientX, y: e.clientY };
     initialDragOffsetRef.current = { ...dragOffset };
-    
-    // Attach listeners to window to handle drag outside the element
-    window.addEventListener('pointermove', handlePointerMove);
-    window.addEventListener('pointerup', handlePointerUp);
   };
 
-  const handlePointerMove = (e: PointerEvent) => {
+  const handlePointerMove = (e: React.PointerEvent) => {
     if (!isDraggingRef.current) return;
     
+    e.preventDefault(); // Prevent scroll on touch
+    e.stopPropagation();
+
     const deltaX = e.clientX - dragStartRef.current.x;
     const deltaY = e.clientY - dragStartRef.current.y;
     
@@ -304,10 +307,11 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
     });
   };
 
-  const handlePointerUp = () => {
-    isDraggingRef.current = false;
-    window.removeEventListener('pointermove', handlePointerMove);
-    window.removeEventListener('pointerup', handlePointerUp);
+  const handlePointerUp = (e: React.PointerEvent) => {
+    if (isDraggingRef.current) {
+        isDraggingRef.current = false;
+        (e.target as Element).releasePointerCapture(e.pointerId);
+    }
   };
 
 
@@ -370,12 +374,6 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
 
     // Smart positioning logic
     const topSpace = popoverPos.top;
-    
-    // We are inside a relative container, so top is relative to it.
-    // However, for "above/below" logic, we usually care about screen space.
-    // But since the header is fixed, we mainly care about not being clipped by the top of the viewport.
-    // A simplified heuristic: if we are near the top of the container (< 250px), place below.
-    // Ideally we'd use getBoundingClientRect() of the container to check visibility, but this is a reasonable proxy.
     const placeBelow = topSpace < 200;
     
     const isMobile = windowWidth < 768;
@@ -433,6 +431,8 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
               <div className="w-6" />
               <div 
                 onPointerDown={handlePointerDown}
+                onPointerMove={handlePointerMove}
+                onPointerUp={handlePointerUp}
                 className="flex-1 flex items-center justify-center cursor-move h-full touch-none hover:bg-gray-100 transition-colors"
               >
                 <GripHorizontal size={16} className="text-gray-300" />
@@ -506,6 +506,8 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
             
             <div 
               onPointerDown={handlePointerDown}
+              onPointerMove={handlePointerMove}
+              onPointerUp={handlePointerUp}
               className="h-6 bg-gray-50 border-t border-gray-100 flex items-center justify-center cursor-move touch-none hover:bg-gray-100 transition-colors shrink-0"
             >
               <GripHorizontal size={16} className="text-gray-300" />
