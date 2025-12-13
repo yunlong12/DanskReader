@@ -16,6 +16,21 @@ const DEFAULT_SETTINGS = {
   bookmarksEnabled: false
 };
 
+// Helper to calculate offset of a specific text node within a container
+const getNodeOffset = (node: Node, container: Node): number => {
+  let offset = 0;
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, null);
+  let currentNode = walker.nextNode();
+  while (currentNode) {
+    if (currentNode === node) {
+      return offset;
+    }
+    offset += currentNode.textContent?.length || 0;
+    currentNode = walker.nextNode();
+  }
+  return 0;
+};
+
 function App() {
   // --- Settings Persistence Logic ---
   const getInitialSettings = () => {
@@ -272,16 +287,76 @@ function App() {
     let text = "";
     let context = "";
 
-    if (selection && !selection.isCollapsed) {
+    if (selection && !selection.isCollapsed && selection.rangeCount > 0) {
         text = selection.toString().trim();
-        if (selection.anchorNode && selection.anchorNode.parentElement) {
-            context = selection.anchorNode.parentElement.innerText;
+        const range = selection.getRangeAt(0);
+
+        // Attempt to find the "context" paragraph
+        let containerEl: Node | null = range.commonAncestorContainer;
+        if (containerEl.nodeType === Node.TEXT_NODE) {
+            containerEl = containerEl.parentElement;
+        }
+
+        // Walk up to find a block element (P, DIV, etc)
+        const validContextTags = ['P', 'DIV', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'LI', 'BLOCKQUOTE'];
+        while (containerEl && containerEl instanceof Element && !validContextTags.includes(containerEl.tagName)) {
+            containerEl = containerEl.parentElement;
+        }
+
+        if (containerEl) {
+             const fullText = containerEl.textContent || "";
+             
+             // Calculate start and end indices in the full text
+             // We mainly care about text nodes for the selection anchors
+             let globalStart = -1;
+             let globalEnd = -1;
+
+             if (range.startContainer.nodeType === Node.TEXT_NODE) {
+                 globalStart = getNodeOffset(range.startContainer, containerEl) + range.startOffset;
+             }
+             
+             if (range.endContainer.nodeType === Node.TEXT_NODE) {
+                 globalEnd = getNodeOffset(range.endContainer, containerEl) + range.endOffset;
+             }
+             
+             // If we successfully mapped to the text content
+             if (globalStart !== -1 && globalEnd !== -1) {
+                  const terminators = ['.', '!', '?', '。', '？', '！', '\n'];
+        
+                  let sStart = 0;
+                  let sEnd = fullText.length;
+                  
+                  // Scan backwards from globalStart
+                  for (let i = globalStart - 1; i >= 0; i--) {
+                      if (terminators.includes(fullText[i])) {
+                          sStart = i + 1;
+                          break;
+                      }
+                  }
+                  
+                  // Scan forwards from globalEnd
+                  for (let i = globalEnd; i < fullText.length; i++) {
+                      if (terminators.includes(fullText[i])) {
+                          sEnd = i + 1; // Include the terminator
+                          break;
+                      }
+                  }
+                  context = fullText.substring(sStart, sEnd).trim();
+             } else {
+                // Fallback: just use the container text if we couldn't calc offsets
+                context = fullText;
+             }
         }
     }
     
     if (!text) {
        alert("Please select some text first.");
        return;
+    }
+    
+    // Fallback if context calculation failed or selection was outside expected structure
+    if (!context) {
+        context = text;
     }
     
     // Treat as sentence to avoid audio auto-play
@@ -544,7 +619,6 @@ function App() {
         <div className="hidden lg:block h-[calc(100vh-4rem)] sticky top-16 flex-shrink-0 z-30">
            <HistorySidebar 
              currentDefinition={currentDefinition}
-             history={wordHistory}
              isLoading={loadingState === LoadingState.TRANSLATING}
              playbackSpeed={playbackSpeed}
            />
