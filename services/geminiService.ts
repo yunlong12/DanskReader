@@ -35,6 +35,7 @@ export const detectLanguage = async (text: string): Promise<{ code: LanguageCode
         responseMimeType: "application/json",
         responseSchema: detectionSchema,
         temperature: 0.1,
+        maxOutputTokens: 150, // Limit detection response size
       },
     });
 
@@ -176,6 +177,7 @@ export const translateWordInContext = async (
         responseMimeType: "application/json",
         responseSchema: translationSchema,
         temperature: 0.1, // Low temperature for consistent translations
+        maxOutputTokens: 500, // Enforce brevity: 500 tokens is ample for JSON + ~50 words, but prevents hallucinations
       },
     });
 
