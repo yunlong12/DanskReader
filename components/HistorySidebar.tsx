@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { HistoryItem, WordDefinition, SUPPORTED_LANGUAGES } from '../types';
-import { BookMarked, Volume2, Loader2, Languages } from 'lucide-react';
+import { BookMarked, Volume2, Loader2, Trash2 } from 'lucide-react';
 import { playPronunciation } from '../services/geminiService';
 
 interface HistorySidebarProps {
@@ -30,10 +30,10 @@ const HistorySidebar: React.FC<HistorySidebarProps> = ({ currentDefinition, hist
   const getFlag = (code: string) => SUPPORTED_LANGUAGES.find(l => l.code === code)?.flag || code;
   
   return (
-    <div className="w-full lg:w-96 bg-gray-50 border-l border-gray-200 flex flex-col h-full">
+    <div className="w-full lg:w-96 bg-gray-50 border-l border-gray-200 flex flex-col h-full shadow-lg lg:shadow-none">
       
       {/* Current Selection Panel */}
-      <div className="p-6 bg-white shadow-sm z-10 border-b border-gray-200">
+      <div className="p-6 bg-white shadow-sm z-10 border-b border-gray-200 flex-shrink-0">
         <h2 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">
           <BookMarked size={16} />
           Current Lookup
@@ -77,6 +77,15 @@ const HistorySidebar: React.FC<HistorySidebarProps> = ({ currentDefinition, hist
               <div className="flex items-start gap-2">
                 <p className="text-lg font-medium text-gray-900 leading-snug">{currentDefinition.translation}</p>
               </div>
+              
+              {currentDefinition.detailedExplanation && (
+                <div className="pt-3 mt-2 border-t border-gray-100">
+                    <p className="text-xs font-bold text-purple-500 uppercase tracking-wider mb-1">Explanation</p>
+                    <p className="text-sm text-gray-600 leading-relaxed bg-purple-50 p-2 rounded-md border border-purple-100">
+                        {currentDefinition.detailedExplanation}
+                    </p>
+                </div>
+              )}
             </div>
 
             <div className="bg-gray-50 p-3 rounded-lg border border-gray-100">
@@ -92,8 +101,10 @@ const HistorySidebar: React.FC<HistorySidebarProps> = ({ currentDefinition, hist
       </div>
 
       {/* History List */}
-      <div className="flex-1 overflow-y-auto p-4">
-        <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 px-2">Recent Vocabulary</h3>
+      <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+        <div className="flex items-center justify-between mb-3 px-2">
+           <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Recent Vocabulary</h3>
+        </div>
         
         {history.length === 0 ? (
           <p className="text-sm text-gray-400 px-2 italic">No vocabulary yet.</p>
@@ -105,16 +116,11 @@ const HistorySidebar: React.FC<HistorySidebarProps> = ({ currentDefinition, hist
                   <div className="w-full">
                     <div className="flex justify-between w-full mb-1">
                       <div className="flex items-center gap-2">
-                         <span className="font-bold text-gray-800 line-clamp-1">{item.word}</span>
+                         <span className="font-bold text-gray-800 line-clamp-1 text-sm">{item.word}</span>
                       </div>
-                      <span className="text-xs text-gray-400 whitespace-nowrap">{new Date(item.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                      <span className="text-[10px] text-gray-400 whitespace-nowrap">{new Date(item.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
                     </div>
-                    <div className="text-gray-600 text-sm line-clamp-2">{item.translation}</div>
-                    <div className="text-gray-400 text-xs mt-1 flex gap-1 items-center">
-                        <span>{getFlag(item.sourceLanguage)}</span>
-                        <span>→</span>
-                        <span>{getFlag(item.targetLanguage)}</span>
-                    </div>
+                    <div className="text-gray-600 text-xs line-clamp-2">{item.translation}</div>
                   </div>
                 </div>
               </div>

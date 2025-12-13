@@ -27,6 +27,21 @@ interface PopoverPosition {
   height: number;
 }
 
+// Helper to calculate offset of a specific text node within a container
+const getNodeOffset = (node: Node, container: Node): number => {
+  let offset = 0;
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, null);
+  let currentNode = walker.nextNode();
+  while (currentNode) {
+    if (currentNode === node) {
+      return offset;
+    }
+    offset += currentNode.textContent?.length || 0;
+    currentNode = walker.nextNode();
+  }
+  return 0;
+};
+
 const ArticleReader: React.FC<ArticleReaderProps> = ({ 
   article, 
   onWordSelect, 
@@ -215,39 +230,17 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
     let start = offset;
     let end = offset;
 
-    // Strategy 1: Intl.Segmenter for languages that support it reliably (especially CJK)
-    const needsSegmentation = ['zh', 'ja', 'ko'].includes(article.language);
-    
-    if (needsSegmentation && typeof Intl !== 'undefined' && (Intl as any).Segmenter) {
-        const segmenter = new (Intl as any).Segmenter(article.language, { granularity: 'word' });
-        const segments = segmenter.segment(text);
-        
-        // Find the segment that contains the offset
-        for (const segment of segments) {
-            if (offset >= segment.index && offset < segment.index + segment.segment.length) {
-                if (segment.isWordLike) {
-                    start = segment.index;
-                    end = segment.index + segment.segment.length;
-                    clickedWord = segment.segment;
-                }
-                break;
-            }
-        }
-    } 
-    
-    // Strategy 2: Fallback Regex expansion
-    if (!clickedWord) {
-         // Look backwards
-        while (start > 0 && isWordChar(text[start - 1])) {
-            start--;
-        }
-        
-        // Look forwards
-        while (end < text.length && isWordChar(text[end])) {
-            end++;
-        }
-        clickedWord = text.substring(start, end).trim();
+    // Strategy: Fallback Regex expansion to find word boundaries
+    // Look backwards
+    while (start > 0 && isWordChar(text[start - 1])) {
+        start--;
     }
+    
+    // Look forwards
+    while (end < text.length && isWordChar(text[end])) {
+        end++;
+    }
+    clickedWord = text.substring(start, end).trim();
 
     // Filter out clicks on whitespace or purely punctuation
     if (!clickedWord || /^[\s\u2000-\u206F\u2E00-\u2E7F\\'!"#$%&()*+,\-.\/:;<=>?@\[\]^`{|}~.。，、？；：‘“’”【】（）…—]+$/.test(clickedWord)) {
@@ -256,14 +249,51 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
       return;
     }
 
-    // Get context
-    let context = "";
-    let el = textNode.parentElement;
+    // Get context container (Paragraph level)
+    let containerEl = textNode.parentElement;
     const validContextTags = ['P', 'DIV', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'LI', 'BLOCKQUOTE'];
-    while (el && !validContextTags.includes(el.tagName)) {
-      el = el.parentElement;
+    while (containerEl && !validContextTags.includes(containerEl.tagName)) {
+      containerEl = containerEl.parentElement;
     }
-    context = el ? el.innerText : (textNode.parentElement?.innerText || text);
+    
+    let context = "";
+
+    if (containerEl) {
+        // Use textContent for robust index mapping
+        const fullText = containerEl.textContent || "";
+        
+        // Calculate global offset of the clicked textNode within the container
+        const nodeOffset = getNodeOffset(textNode, containerEl);
+        const globalStart = nodeOffset + start;
+        const globalEnd = nodeOffset + end;
+        
+        // Find sentence boundaries based on period/terminators
+        const terminators = ['.', '!', '?', '。', '？', '！', '\n'];
+        
+        let sStart = 0;
+        let sEnd = fullText.length;
+        
+        // Scan backwards from globalStart to find the previous terminator
+        for (let i = globalStart - 1; i >= 0; i--) {
+            if (terminators.includes(fullText[i])) {
+                sStart = i + 1;
+                break;
+            }
+        }
+        
+        // Scan forwards from globalEnd to find the next terminator
+        for (let i = globalEnd; i < fullText.length; i++) {
+            if (terminators.includes(fullText[i])) {
+                sEnd = i + 1; // Include the terminator
+                break;
+            }
+        }
+        
+        context = fullText.substring(sStart, sEnd).trim();
+    } else {
+        // Fallback to just the text node content if no container found
+        context = textNode.textContent || "";
+    }
 
     // Create a temporary range to measure the word's position for the popover
     const measureRange = document.createRange();
@@ -421,7 +451,7 @@ const ArticleReader: React.FC<ArticleReaderProps> = ({
     return (
         <div 
           style={popoverStyle}
-          className="mb-2"
+          className="mb-2 lg:hidden"
         >
           <div className="bg-white rounded-lg shadow-xl border border-gray-200 w-72 md:w-80 animate-in fade-in zoom-in duration-200 overflow-hidden flex flex-col max-h-[400px]">
             {/* Top Drag Handle Header */}

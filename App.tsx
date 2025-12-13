@@ -3,6 +3,7 @@ import { translateWordInContext, playPronunciation, stopAudio } from './services
 import { Article, WordDefinition, HistoryItem, LoadingState, LanguageCode, SUPPORTED_LANGUAGES } from './types';
 import ArticleReader from './components/ArticleReader';
 import ArticleGeneratorModal from './components/ArticleGeneratorModal';
+import HistorySidebar from './components/HistorySidebar';
 import { Sparkles, Volume2, Turtle, FileText, Maximize, Minimize, Plus, Minus, Type, Languages, Palette, VolumeX, Bookmark, MessageSquareQuote } from 'lucide-react';
 
 const DEFAULT_SETTINGS = {
@@ -54,6 +55,22 @@ function App() {
   const [readingTheme, setReadingTheme] = useState<'light' | 'sepia' | 'dark'>(initialSettings.readingTheme);
   const [bookmarksEnabled, setBookmarksEnabled] = useState(initialSettings.bookmarksEnabled);
   
+  // Word History
+  const [wordHistory, setWordHistory] = useState<HistoryItem[]>(() => {
+    try {
+      const saved = localStorage.getItem('dansk_reader_word_history');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      console.error("Failed to load word history", e);
+      return [];
+    }
+  });
+
+  // Save word history
+  useEffect(() => {
+    localStorage.setItem('dansk_reader_word_history', JSON.stringify(wordHistory));
+  }, [wordHistory]);
+
   // Ref to track the current request ID to prevent overlapping loops/race conditions
   const currentRequestIdRef = useRef<number>(0);
   // Track touch-triggered manual translate to avoid duplicate clicks
@@ -205,6 +222,19 @@ function App() {
       if (currentRequestIdRef.current !== requestId) return;
 
       setCurrentDefinition(definition);
+      
+      // Add to history
+      const newItem: HistoryItem = {
+        ...definition,
+        id: crypto.randomUUID(),
+        timestamp: Date.now()
+      };
+      
+      setWordHistory(prev => {
+          // Avoid duplicates at the very top (debounce)
+          const filtered = prev.filter(item => item.word.toLowerCase() !== newItem.word.toLowerCase() || (Date.now() - item.timestamp > 1000));
+          return [newItem, ...prev].slice(0, 100); // Keep last 100 items
+      });
       
       // Handle Auto-Play logic: Only play if it's NOT a sentence selection
       if (!isSentence && autoPlayCount > 0) {
@@ -491,7 +521,7 @@ function App() {
       </header>
 
       {/* Main Content - Padded to account for fixed header */}
-      <div className="pt-16 flex-1 max-w-7xl w-full mx-auto flex flex-col relative items-start min-h-screen">
+      <div className="pt-16 flex-1 max-w-7xl w-full mx-auto flex flex-col lg:flex-row relative items-start min-h-screen">
         <main className="flex-1 p-4 md:p-8 w-full min-w-0">
           <ArticleReader 
             article={article}
@@ -509,6 +539,16 @@ function App() {
             playbackSpeed={playbackSpeed}
           />
         </main>
+        
+        {/* Sidebar for Desktop */}
+        <div className="hidden lg:block h-[calc(100vh-4rem)] sticky top-16 flex-shrink-0 z-30">
+           <HistorySidebar 
+             currentDefinition={currentDefinition}
+             history={wordHistory}
+             isLoading={loadingState === LoadingState.TRANSLATING}
+             playbackSpeed={playbackSpeed}
+           />
+        </div>
       </div>
 
       <ArticleGeneratorModal 
